@@ -69,11 +69,11 @@ public class User {
         this.activation = activation;
     }
 
-    public UserActivate getRole() {
+    public UserRole getRole() {
         return role;
     }
 
-    public void setRole(UserActivate role) {
+    public void setRole(UserRole role) {
         this.role = role;
     }
     //  Реализация equals и hashCode по ID (защита от ошибок в коллекциях)
