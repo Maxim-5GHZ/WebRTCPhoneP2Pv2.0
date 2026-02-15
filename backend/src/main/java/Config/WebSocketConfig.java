@@ -1,5 +1,6 @@
-package Controllers;
+package Config;
 
+import Controllers.SocketHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
@@ -18,10 +19,7 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Value("${app.cors.allowed-origins:*}")
     private String[] allowedOrigins;
 
-    /**
-     * Конструктор для внедрения зависимостей.
-     * @param socketHandler Обработчик сокетов для регистрации.
-     */
+
     public WebSocketConfig(SocketHandler socketHandler) {
         this.socketHandler = socketHandler;
     }
