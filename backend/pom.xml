@@ -61,7 +61,11 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Поддержка JSON парсинга (Jackson) для токенов -->
+        <dependency>
+            <groupId>me.paulschwarz</groupId>
+            <artifactId>spring-dotenv</artifactId>
+            <version>4.0.0</version>
+        </dependency>
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
             <artifactId>jjwt-jackson</artifactId>

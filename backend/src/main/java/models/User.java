@@ -30,12 +30,12 @@ public class User {
     
     @Enumerated(EnumType.STRING)
     @Column(name="activation",nullable = false)
-    private UserActivate activation;
+    private UserActivate activation = Enable;
 
 
 
     public User() {
-        this.activation = Disable;
+
     }
 
 
@@ -43,7 +43,6 @@ public class User {
         this.username = username;
         this.login = login;
         this.password = password;
-        this.activation = Enable;
         this.role= role;
     }
 
