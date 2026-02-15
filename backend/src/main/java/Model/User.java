@@ -5,6 +5,7 @@ import Enums.UserRole;
 
 import static Enums.UserActivate.Disable;
 import static Enums.UserActivate.Enable;
+import static Enums.UserRole.Base;
 
 @Entity
 @Table(name = "users")
@@ -24,23 +25,27 @@ public class User {
     @Column(name = "password", nullable = false)
     private String password;
 
-    @Column(name="role")
-    private UserActivate role;
+    @Column(name="role",nullable = false)
+    private UserRole role;
 
-
+    
     @Enumerated(EnumType.STRING)
-    @Column(name="activation")
+    @Column(name="activation",nullable = false)
     private UserActivate activation;
+
+
+
     public User() {
         this.activation = Disable;
     }
 
 
-    public User(String username, String login, String password) {
+    public User(String username, String login, String password,UserRole role) {
         this.username = username;
         this.login = login;
         this.password = password;
         this.activation = Enable;
+        this.role= role;
     }
 
 
@@ -84,7 +89,7 @@ public class User {
         return getClass().hashCode();
     }
 
-  
+
     @Override
     public String toString() {
         return "User{" +
