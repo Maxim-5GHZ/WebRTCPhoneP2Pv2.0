@@ -14,17 +14,27 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Обработчик WebSocket для обработки сигнализации WebRTC.
+ */
 @Component
 public class SocketHandler extends TextWebSocketHandler {
 
     private static final Logger logger = LoggerFactory.getLogger(SocketHandler.class);
     private final Map<String, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final ObjectMapper objectMapper;
-
+    /**
+     * Конструктор для внедрения зависимостей. @param objectMapper-объект для сопоставления JSON.
+     */
     public SocketHandler(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
+    /**
+     * Вызывается после успешного установления соединения WebSocket.
+     * @param session Установленный сеанс.
+     * @throws Exception в случае ошибки.
+     */
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
         sessions.put(session.getId(), session);
@@ -34,12 +44,22 @@ public class SocketHandler extends TextWebSocketHandler {
         sendMessage(session, Map.of("type", "my-id", "data", session.getId()));
     }
 
+    /**
+     * Вызывается после закрытия соединения WebSocket.
+     * @param session Закрытый сеанс.
+     * @param status Статус закрытия.
+     */
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         sessions.remove(session.getId());
         logger.info("[Disconnected] Session ID: {}", session.getId());
     }
 
+    /**
+     * Обрабатывает входящие текстовые сообщения WebSocket.
+     * @param session Сеанс, отправивший сообщение.
+     * @param message Полученное сообщение.
+     */
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
         try {
@@ -61,6 +81,11 @@ public class SocketHandler extends TextWebSocketHandler {
         }
     }
 
+    /**
+     * Отправляет сообщение JSON указанному сеансу.
+     * @param session Сеанс для отправки сообщения.
+     * @param payload Данные для отправки.
+     */
     private void sendMessage(WebSocketSession session, Object payload) {
         try {
             String json = objectMapper.writeValueAsString(payload);

@@ -6,6 +6,9 @@ import org.springframework.web.socket.config.annotation.EnableWebSocket;
 import org.springframework.web.socket.config.annotation.WebSocketConfigurer;
 import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry;
 
+/**
+ * Класс конфигурации WebSocket.
+ */
 @Configuration
 @EnableWebSocket
 public class WebSocketConfig implements WebSocketConfigurer {
@@ -15,10 +18,18 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Value("${app.cors.allowed-origins:*}")
     private String[] allowedOrigins;
 
+    /**
+     * Конструктор для внедрения зависимостей.
+     * @param socketHandler Обработчик сокетов для регистрации.
+     */
     public WebSocketConfig(SocketHandler socketHandler) {
         this.socketHandler = socketHandler;
     }
 
+    /**
+     * Регистрирует обработчики WebSocket.
+     * @param registry Реестр обработчиков WebSocket.
+     */
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(socketHandler, "/signal")
