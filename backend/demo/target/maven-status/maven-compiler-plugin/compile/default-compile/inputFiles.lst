@@ -1,3 +1,4 @@
-/home/maxim/Рабочий стол/xxxsite777/backend/demo/src/main/java/com/example/demo/DemoApplication.java
-/home/maxim/Рабочий стол/xxxsite777/backend/demo/src/main/java/com/example/demo/WebSocketConfig.java
-/home/maxim/Рабочий стол/xxxsite777/backend/demo/src/main/java/com/example/demo/SocketHandler.java
+/home/maxim/Рабочий стол/WebRTCPhoneP2Pv2.0/backend/demo/src/main/java/controllers/Main.java
+/home/maxim/Рабочий стол/WebRTCPhoneP2Pv2.0/backend/demo/src/main/java/controllers/RootController.java
+/home/maxim/Рабочий стол/WebRTCPhoneP2Pv2.0/backend/demo/src/main/java/controllers/SocketHandler.java
+/home/maxim/Рабочий стол/WebRTCPhoneP2Pv2.0/backend/demo/src/main/java/controllers/WebSocketConfig.java

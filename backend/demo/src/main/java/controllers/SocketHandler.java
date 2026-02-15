@@ -1,4 +1,4 @@
-package com.example.demo;
+package controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;

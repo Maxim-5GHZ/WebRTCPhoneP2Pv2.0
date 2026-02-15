@@ -1,19 +1,16 @@
-package com.example.demo;
+package controllers;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-/**
- * Главный класс приложения Spring Boot.
- */
 @SpringBootApplication
-public class DemoApplication {
+public class Main {
 
 	/**
 	 * Основной метод, который запускает приложение Spring Boot.
 	 * @param args Аргументы командной строки.
 	 */
 	public static void main(String[] args) {
-		SpringApplication.run(DemoApplication.class, args);
+		SpringApplication.run(Main.class, args);
 	}
 }
