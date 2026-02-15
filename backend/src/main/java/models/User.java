@@ -1,10 +1,10 @@
-package Models;
-import Enums.UserActivate;
+package models;
+import enums.UserActivate;
 import jakarta.persistence.*;
-import Enums.UserRole;
+import enums.UserRole;
 
-import static Enums.UserActivate.Disable;
-import static Enums.UserActivate.Enable;
+import static enums.UserActivate.Disable;
+import static enums.UserActivate.Enable;
 
 @Entity
 @Table(name = "users")
