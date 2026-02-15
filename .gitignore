@@ -1,0 +1,65 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+release-pom.xml
+.repository/
+.flattened-pom.xml
+%ignore.unresolved.pluginversions%
+
+# Node.js
+node_modules/
+dist/
+build/
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+pnpm-lock.yaml
+package-lock.json
+
+# Logs
+logs/
+*.log
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+
+# VS Code
+.vscode/
+
+# Compiled Java classes
+*.class
+
+# Package Files #
+*.jar
+*.war
+*.ear
+*.zip
+*.tar.gz
+*.rar
+
+# For web projects
+/frontend/dist
+/backend/target
+
+# Other
+*.bak
+*.swp
+*~
+.#*
