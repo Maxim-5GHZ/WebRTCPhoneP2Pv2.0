@@ -5,7 +5,6 @@ import {
   useState,
   useRef,
 } from "react";
-import type { SignalMessage } from "../types/types";
 
 interface SocketContextType {
   socket: WebSocket | null;

@@ -16,6 +16,8 @@ export function useWebRTC(
     "idle" | "calling" | "ringing" | "connected"
   >("idle");
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
+  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
+  const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(true);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
@@ -168,13 +170,35 @@ export function useWebRTC(
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
   };
 
+  const toggleAudio = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getAudioTracks().forEach((track) => {
+        track.enabled = !track.enabled;
+        setIsAudioMuted(!track.enabled);
+      });
+    }
+  };
+
+  const toggleVideo = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getVideoTracks().forEach((track) => {
+        track.enabled = !track.enabled;
+        setIsVideoEnabled(track.enabled);
+      });
+    }
+  };
+
   return {
     myId,
     status,
     incomingCall,
+    isAudioMuted,
+    isVideoEnabled,
     handleCall,
     handleAccept,
     handleReject,
     stopCall,
+    toggleAudio,
+    toggleVideo,
   };
 }

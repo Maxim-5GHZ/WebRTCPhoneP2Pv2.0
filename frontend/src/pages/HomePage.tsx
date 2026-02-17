@@ -14,9 +14,13 @@ function HomePageContent() {
     myId,
     status,
     incomingCall,
+    isAudioMuted,
+    isVideoEnabled,
     handleCall,
     handleAccept,
     handleReject,
+    toggleAudio,
+    toggleVideo,
   } = useWebRTC(localVideoRef, remoteVideoRef);
 
   if (!user) {
@@ -37,6 +41,10 @@ function HomePageContent() {
         onCall={handleCall}
         onAccept={handleAccept}
         onReject={handleReject}
+        onToggleAudio={toggleAudio}
+        onToggleVideo={toggleVideo}
+        isAudioMuted={isAudioMuted}
+        isVideoEnabled={isVideoEnabled}
       />
     </div>
   );

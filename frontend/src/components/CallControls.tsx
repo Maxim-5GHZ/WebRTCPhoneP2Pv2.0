@@ -8,6 +8,10 @@ interface CallControlsProps {
   onCall: (targetId: string) => void;
   onAccept: () => void;
   onReject: () => void;
+  onToggleAudio: () => void;
+  onToggleVideo: () => void;
+  isAudioMuted: boolean;
+  isVideoEnabled: boolean;
 }
 
 export function CallControls({
@@ -17,6 +21,10 @@ export function CallControls({
   onCall,
   onAccept,
   onReject,
+  onToggleAudio,
+  onToggleVideo,
+  isAudioMuted,
+  isVideoEnabled,
 }: CallControlsProps) {
   const [targetIdInput, setTargetIdInput] = useState<string>("");
 
@@ -55,9 +63,23 @@ export function CallControls({
       )}
 
       {(status === "calling" || status === "connected") && (
-        <button onClick={onReject} style={styles.buttonDangerWide}>
-          Завершить звонок
-        </button>
+        <div style={{ display: "flex", gap: 10, justifyContent: "center" }}>
+          <button
+            onClick={onToggleAudio}
+            style={isAudioMuted ? styles.buttonWarning : styles.buttonPrimary}
+          >
+            {isAudioMuted ? "Включить звук" : "Выключить звук"}
+          </button>
+          <button
+            onClick={onToggleVideo}
+            style={!isVideoEnabled ? styles.buttonWarning : styles.buttonPrimary}
+          >
+            {!isVideoEnabled ? "Включить видео" : "Выключить видео"}
+          </button>
+          <button onClick={onReject} style={styles.buttonDanger}>
+            Завершить звонок
+          </button>
+        </div>
       )}
 
       <div style={{ marginTop: 10, color: "#666" }}>Статус: {status}</div>
@@ -102,21 +124,12 @@ const styles: Record<string, React.CSSProperties> = {
     marginLeft: 10,
   },
   buttonDanger: {
-    padding: "5px 10px",
-    background: "#dc3545",
-    color: "#fff",
-    border: "none",
-    borderRadius: 4,
-    cursor: "pointer",
-  },
-  buttonDangerWide: {
     padding: 10,
     background: "#dc3545",
     color: "#fff",
     border: "none",
     borderRadius: 4,
     cursor: "pointer",
-    width: "100%",
   },
   buttonSuccess: {
     padding: 10,
@@ -126,11 +139,20 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     cursor: "pointer",
   },
+  buttonWarning: {
+    padding: 10,
+    background: "#ffc107",
+    color: "#212529",
+    border: "none",
+    borderRadius: 4,
+    cursor: "pointer",
+  },
   connectionInfo: {
     background: "#f8f9fa",
     padding: 10,
     borderRadius: 4,
     marginBottom: 20,
+    marginTop: 10,
   },
   incomingBox: {
     background: "#e2e6ea",
