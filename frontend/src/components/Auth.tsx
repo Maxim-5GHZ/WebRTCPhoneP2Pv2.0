@@ -1,4 +1,4 @@
-import { useAuthContext } from "../contexts/AuthProvider";
+import { useAuthContext } from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 
 export function Auth({ mode }: { mode: "login" | "register" }) {

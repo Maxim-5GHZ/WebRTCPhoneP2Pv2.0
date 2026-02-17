@@ -1,4 +1,10 @@
-import { createContext, useContext, useEffect, useRef } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useRef,
+} from "react";
 import type { SignalMessage } from "../types/types";
 
 interface SocketContextType {
@@ -23,22 +29,17 @@ export function SocketProvider({
   user: any;
   children: React.ReactNode;
 }) {
-  const socketRef = useRef<WebSocket | null>(null);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
+  const socketRef = useRef(socket);
+  socketRef.current = socket;
 
   useEffect(() => {
-    if (user) {
+    if (user && !socketRef.current) {
       const ws = new WebSocket(`ws://localhost:8080/signal?token=${user.token}`);
-      socketRef.current = ws;
-
-      ws.onmessage = async (event) => {
-        const msg: SignalMessage = JSON.parse(event.data);
-        // Logic to handle incoming messages will be in useWebRTC hook
-        // This is just to demonstrate the connection
-        console.log("Received message:", msg);
-      };
+      setSocket(ws);
 
       ws.onclose = () => {
-        socketRef.current = null;
+        setSocket(null);
       };
 
       return () => {
@@ -48,13 +49,13 @@ export function SocketProvider({
   }, [user]);
 
   const sendSignal = (type: string, data?: any, to?: string) => {
-    if (socketRef.current?.readyState === WebSocket.OPEN) {
-      socketRef.current.send(JSON.stringify({ type, data, to }));
+    if (socket?.readyState === WebSocket.OPEN) {
+      socket.send(JSON.stringify({ type, data, to }));
     }
   };
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, sendSignal }}>
+    <SocketContext.Provider value={{ socket, sendSignal }}>
       {children}
     </SocketContext.Provider>
   );

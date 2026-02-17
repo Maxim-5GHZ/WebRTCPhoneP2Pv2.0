@@ -2,7 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
-import { useAuthContext } from './contexts/AuthProvider';
+import { useAuthContext } from './hooks/useAuth';
 
 function App() {
   const { user } = useAuthContext();

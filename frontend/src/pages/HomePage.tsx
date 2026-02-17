@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { useAuthContext } from "../contexts/AuthProvider";
+import { useAuthContext } from "../hooks/useAuth";
 import { useWebRTC } from "../hooks/useWebRTC";
 import { Header } from "../components/Header";
 import { VideoPlayer } from "../components/VideoPlayer";

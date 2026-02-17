@@ -1,7 +1,17 @@
-import { useState } from "react";
+import { createContext, useContext, useState } from "react";
 import type { UserData } from "../types/types";
 
 const API_URL = "http://localhost:8080/api/auth";
+
+export const AuthContext = createContext<ReturnType<typeof useAuth> | null>(null);
+
+export function useAuthContext() {
+  const context = useContext(AuthContext);
+  if (!context) {
+    throw new Error("useAuthContext must be used within an AuthProvider");
+  }
+  return context;
+}
 
 export function useAuth() {
   const [user, setUser] = useState<UserData | null>(null);
