@@ -1,5 +1,6 @@
 import { useAuthContext } from "../hooks/useAuth";
 import { useNavigate } from "react-router-dom";
+import { useState } from "react";
 
 export function Auth({ mode }: { mode: "login" | "register" }) {
   const {
@@ -13,6 +14,12 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
     handleAuth,
   } = useAuthContext();
   const navigate = useNavigate();
+  const [emailError, setEmailError] = useState("");
+
+  const validateEmail = (email: string) => {
+    const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return re.test(email);
+  };
 
   const handleSwitchMode = () => {
     if (mode === "login") {
@@ -28,6 +35,11 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
       <form
         onSubmit={async (e) => {
           e.preventDefault();
+          if (!validateEmail(loginInput)) {
+            setEmailError("Пожалуйста, введите корректный email");
+            return;
+          }
+          setEmailError("");
           setAuthMode(mode);
           await handleAuth(e);
         }}
@@ -43,12 +55,19 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
           />
         )}
         <input
+          type="email"
           placeholder="Логин (email)"
           value={loginInput}
-          onChange={(e) => setLoginInput(e.target.value)}
+          onChange={(e) => {
+            setLoginInput(e.target.value);
+            if (emailError) {
+              setEmailError("");
+            }
+          }}
           style={styles.input}
           required
         />
+        {emailError && <p style={{ color: "red" }}>{emailError}</p>}
         <input
           type="password"
           placeholder="Пароль"

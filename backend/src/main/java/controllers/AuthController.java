@@ -1,5 +1,6 @@
 package controllers;
 
+import jakarta.validation.Valid;
 import models.*;
 import models.User;
 import repositories.UserRepository;
@@ -30,9 +31,9 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public ResponseEntity<?> register(@RequestBody RegisterRequest request) {
+    public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
         try {
-            User user = userRegistration.registerNewUser(request.username(), request.login(), request.password());
+            User user = userRegistration.registerNewUser(request.getUsername(), request.getLogin(), request.getPassword());
             String token = jwtService.generateToken(user.getLogin());
             return ResponseEntity.ok(new UserResponse(user.getId(), user.getUsername(), user.getLogin(), user.getRole().toString(), token));
         } catch (Exception e) {
@@ -41,9 +42,9 @@ public class AuthController {
     }
 
     @PostMapping("/login")
-    public ResponseEntity<?> login(@RequestBody LoginRequest request) {
-        return userRepository.findByLogin(request.login())
-                .filter(user -> passwordEncoder.matches(request.password(), user.getPassword()))
+    public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
+        return userRepository.findByLogin(request.getLogin())
+                .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()))
                 .map(user -> {
                     String token = jwtService.generateToken(user.getLogin());
                     return ResponseEntity.ok(new UserResponse(user.getId(), user.getUsername(), user.getLogin(), user.getRole().toString(), token));
