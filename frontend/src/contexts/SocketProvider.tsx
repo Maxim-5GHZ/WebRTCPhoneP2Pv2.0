@@ -16,7 +16,10 @@ export function SocketProvider({
 
   useEffect(() => {
     if (user) {
-      const ws = new WebSocket(`ws://localhost:8080/signal?token=${user.token}`);
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      const wsUrl = `${protocol}//${host}/signal?token=${user.token}`;
+      const ws = new WebSocket(wsUrl);
       
       ws.onopen = () => {
         setSocket(ws);

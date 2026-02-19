@@ -1,7 +1,7 @@
 import { createContext, useContext, useState } from "react";
 import type { User } from "../types/types";
 
-const API_URL = "http://localhost:8080/api/auth";
+const API_URL = "/api/auth";
 
 export const AuthContext = createContext<ReturnType<typeof useAuth> | null>(null);
 
