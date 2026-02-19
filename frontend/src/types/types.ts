@@ -1,28 +1,28 @@
-// --- Типы ---
-export type SignalType = "my-id" | "offer" | "answer" | "candidate" | "reject";
-
-export type SignalData =
-  | RTCSessionDescriptionInit
-  | RTCIceCandidateInit
-  | string
-  | null;
-
-export interface SignalMessage {
-  type: SignalType;
-  data?: SignalData;
-  from?: string;
-  to?: string;
+export interface User {
+  id: any;
+  username: string;
+  token: string;
+  role: string;
+  login: string;
+  inCall?: boolean;
 }
 
 export interface IncomingCall {
-  from: string;
-  offer: RTCSessionDescriptionInit;
+    from: string;
+    offer: RTCSessionDescriptionInit;
 }
 
-export interface UserData {
-  id: number;
-  username: string;
-  login: string;
-  role: string;
-  token: string;
+export interface SignalMessage {
+    type: string;
+    myId?: string;
+    data?: any;
+    userId?: string;
+    username?: string;
+    inCall?: boolean;
+    from?: string;
+    offer?: RTCSessionDescriptionInit;
+    answer?: RTCSessionDescriptionInit;
+    candidate?: RTCIceCandidateInit;
+    reason?: string;
+    to?: string;
 }

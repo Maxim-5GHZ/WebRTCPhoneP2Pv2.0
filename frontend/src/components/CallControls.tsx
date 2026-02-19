@@ -1,13 +1,15 @@
 import { useState } from "react";
-import type { IncomingCall } from "../types/types";
+import type { IncomingCall, User } from "../types/types";
 
 interface CallControlsProps {
+  myId: string,
   status: "idle" | "calling" | "ringing" | "connected";
-  myId: string;
+  onlineUsers: User[];
   incomingCall: IncomingCall | null;
   onCall: (targetId: string) => void;
   onAccept: () => void;
   onReject: () => void;
+  onHangUp: () => void;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
   isAudioMuted: boolean;
@@ -15,33 +17,40 @@ interface CallControlsProps {
 }
 
 export function CallControls({
-  status,
   myId,
+  status,
+  onlineUsers,
   incomingCall,
   onCall,
   onAccept,
   onReject,
+  onHangUp,
   onToggleAudio,
   onToggleVideo,
   isAudioMuted,
   isVideoEnabled,
 }: CallControlsProps) {
-  const [targetIdInput, setTargetIdInput] = useState<string>("");
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
 
   return (
     <div style={styles.controls}>
       {status === "idle" && (
         <div style={{ display: "flex", gap: 10 }}>
-          <input
-            value={targetIdInput}
-            onChange={(e) => setTargetIdInput(e.target.value)}
-            placeholder="ID собеседника"
+          <select
+            value={selectedUserId}
+            onChange={(e) => setSelectedUserId(e.target.value)}
             style={styles.input}
-          />
+          >
+            <option value="">Выберите пользователя</option>
+            {onlineUsers.filter(user => user.id !== myId).map((user) => (
+              <option key={user.id} value={user.id} disabled={user.inCall}>
+                {user.username} {user.inCall ? " (в звонке)" : ""}
+              </option>
+            ))}
+          </select>
           <button
-            onClick={() => onCall(targetIdInput)}
-            disabled={!targetIdInput}
-            style={styles.buttonPrimary}
+            onClick={() => onCall(selectedUserId)}
+            disabled={!selectedUserId}
           >
             Видеозвонок
           </button>
@@ -76,35 +85,25 @@ export function CallControls({
           >
             {!isVideoEnabled ? "Включить видео" : "Выключить видео"}
           </button>
-          <button onClick={onReject} style={styles.buttonDanger}>
+          <button onClick={onHangUp} style={styles.buttonDanger}>
             Завершить звонок
           </button>
         </div>
       )}
 
       <div style={{ marginTop: 10, color: "#666" }}>Статус: {status}</div>
-      <div style={styles.connectionInfo}>
-        <p>
-          Ваш ID соединения: <strong>{myId || "..."}</strong>
-        </p>
-        <button
-          onClick={() => navigator.clipboard.writeText(myId)}
-          style={styles.buttonSecondary}
-        >
-          Копировать ID
-        </button>
-      </div>
     </div>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  controls: { textAlign: "center" },
+  controls: { textAlign: "center", marginTop: 20 },
   input: {
     padding: 10,
     borderRadius: 4,
     border: "1px solid #ccc",
     fontSize: 16,
+    flexGrow: 1,
   },
   buttonPrimary: {
     padding: 10,

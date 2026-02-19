@@ -1,14 +1,15 @@
-import { useRef, useState, useEffect } from "react";
-import type { IncomingCall, SignalMessage } from "../types/types";
-import { useSocket } from "../contexts/SocketProvider";
+import { useRef, useState, useEffect, useCallback } from "react";
+import type { IncomingCall, SignalMessage, User } from "../types/types";
+import { useSocket } from "../hooks/useSocket";
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
 
 export function useWebRTC(
-  localVideoRef: React.RefObject<HTMLVideoElement>,
-  remoteVideoRef: React.RefObject<HTMLVideoElement>
+  localVideoRef: React.RefObject<HTMLVideoElement | null>,
+  remoteVideoRef: React.RefObject<HTMLVideoElement | null>,
+  setOnlineUsers: React.Dispatch<React.SetStateAction<User[]>>
 ) {
   const { socket, sendSignal } = useSocket();
   const [myId, setMyId] = useState<string>("");
@@ -21,50 +22,103 @@ export function useWebRTC(
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const remoteUserIdRef = useRef<string | null>(null);
+
+
+  const stopCall = useCallback(() => {
+    if (remoteUserIdRef.current) {
+        sendSignal({ type: 'hang-up', to: remoteUserIdRef.current });
+    }
+
+    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    localStreamRef.current = null;
+
+    if (pcRef.current) {
+      pcRef.current.close();
+      pcRef.current = null;
+    }
+
+    setStatus("idle");
+    setIncomingCall(null);
+    remoteUserIdRef.current = null;
+    if (localVideoRef.current) localVideoRef.current.srcObject = null;
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+  }, [sendSignal, localVideoRef, remoteVideoRef]);
 
   useEffect(() => {
     if (socket) {
-      socket.onmessage = async (event: MessageEvent) => {
+      const handleMessage = async (event: MessageEvent) => {
         const msg: SignalMessage = JSON.parse(event.data);
 
         switch (msg.type) {
-          case "my-id":
-            if (typeof msg.data === "string") setMyId(msg.data);
+          case "connection-success":
+            if (msg.myId) {
+              setMyId(msg.myId);
+            }
+            setOnlineUsers(msg.data as User[]);
             break;
-          case "offer":
-            if (msg.from && msg.data) {
+            case "user-connected":
+            setOnlineUsers(prev => {
+                if (prev.find(user => user.id === msg.userId)) {
+                    return prev;
+                }
+                return [...prev, { id: msg.userId, username: msg.username, inCall: false } as User];
+            });
+            break;
+          case "user-disconnected":
+            setOnlineUsers(prev => prev.filter(user => user.id !== msg.userId));
+            break;
+          case "user-in-call-status-changed":
+            setOnlineUsers(prev => prev.map(user => {
+                if (user.id === msg.userId) {
+                    return { ...user, inCall: msg.inCall ?? false };
+                }
+                return user;
+            }));
+            break;
+          case "call-made":
+            if (msg.from && msg.offer) {
               setIncomingCall({
-                from: msg.from,
-                offer: msg.data as RTCSessionDescriptionInit,
+                from: String(msg.from),
+                offer: msg.offer as RTCSessionDescriptionInit,
               });
               setStatus("ringing");
+              remoteUserIdRef.current = String(msg.from);
             }
             break;
-          case "answer":
-            if (pcRef.current && msg.data) {
+          case "answer-made":
+            if (pcRef.current && msg.answer) {
               await pcRef.current.setRemoteDescription(
                 new RTCSessionDescription(
-                  msg.data as RTCSessionDescriptionInit
+                  msg.answer as RTCSessionDescriptionInit
                 )
               );
               setStatus("connected");
             }
             break;
-          case "candidate":
-            if (pcRef.current?.remoteDescription && msg.data) {
+          case "ice-candidate":
+            if (pcRef.current?.remoteDescription && msg.candidate) {
               await pcRef.current.addIceCandidate(
-                new RTCIceCandidate(msg.data as RTCIceCandidateInit)
+                new RTCIceCandidate(msg.candidate as RTCIceCandidateInit)
               );
             }
             break;
-          case "reject":
+          case "call-rejected":
+            alert(msg.reason);
+            stopCall();
+            break;
+          case "hang-up":
             stopCall();
             break;
         }
       };
-    }
-  }, [socket]);
+      socket.addEventListener('message', handleMessage);
 
+      return () => {
+        socket.removeEventListener('message', handleMessage);
+      }
+    }
+  }, [socket, setOnlineUsers, stopCall]);
   const createPC = (remoteId: string): RTCPeerConnection => {
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
@@ -83,7 +137,11 @@ export function useWebRTC(
 
     pc.onicecandidate = (event) => {
       if (event.candidate)
-        sendSignal("candidate", event.candidate.toJSON(), remoteId);
+        sendSignal({
+          type: "ice-candidate",
+          candidate: event.candidate.toJSON(),
+          to: remoteId,
+        });
     };
 
     pc.onconnectionstatechange = () => {
@@ -114,17 +172,18 @@ export function useWebRTC(
     }
   };
 
-  const handleCall = async (targetIdInput: string) => {
-    if (!targetIdInput) return;
+  const handleCall = async (targetId: string) => {
+    if (!targetId) return;
     try {
       await startLocalStream();
       setStatus("calling");
+      remoteUserIdRef.current = targetId;
 
-      const pc = createPC(targetIdInput);
+      const pc = createPC(targetId);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      sendSignal("offer", offer, targetIdInput);
+      sendSignal({ type: "call-user", offer: offer, to: targetId });
     } catch (e) {
       console.error(e);
     }
@@ -143,7 +202,7 @@ export function useWebRTC(
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      sendSignal("answer", answer, incomingCall.from);
+      sendSignal({ type: "make-answer", answer: answer, to: incomingCall.from });
     } catch (e) {
       console.error(e);
     }
@@ -151,30 +210,14 @@ export function useWebRTC(
 
   const handleReject = () => {
     const id = incomingCall?.from;
-    if (id) sendSignal("reject", null, id);
+    if (id) sendSignal({ type: "hang-up", to: id });
     stopCall();
-  };
-
-  const stopCall = () => {
-    localStreamRef.current?.getTracks().forEach((track) => track.stop());
-    localStreamRef.current = null;
-
-    if (pcRef.current) {
-      pcRef.current.close();
-      pcRef.current = null;
-    }
-
-    setStatus("idle");
-    setIncomingCall(null);
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
   };
 
   const toggleAudio = () => {
     if (localStreamRef.current) {
       localStreamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = !track.enabled;
-        setIsAudioMuted(!track.enabled);
+        track.enabled = !track.enabled;        setIsAudioMuted(!track.enabled);
       });
     }
   };
@@ -202,3 +245,4 @@ export function useWebRTC(
     toggleVideo,
   };
 }
+

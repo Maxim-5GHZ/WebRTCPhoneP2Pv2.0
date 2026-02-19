@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from "react";
-import type { UserData } from "../types/types";
+import type { User } from "../types/types";
 
 const API_URL = "http://localhost:8080/api/auth";
 
@@ -14,7 +14,7 @@ export function useAuthContext() {
 }
 
 export function useAuth() {
-  const [user, setUser] = useState<UserData | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [loginInput, setLoginInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
@@ -41,7 +41,7 @@ export function useAuth() {
 
       if (!res.ok) throw new Error(await res.text());
 
-      const data: UserData = await res.json();
+      const data: User = await res.json();
       setUser(data);
       return data;
     } catch (err) {

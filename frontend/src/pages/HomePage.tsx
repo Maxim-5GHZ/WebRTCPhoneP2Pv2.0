@@ -1,72 +1,136 @@
-import { useRef } from "react";
-import { useAuthContext } from "../hooks/useAuth";
-import { useWebRTC } from "../hooks/useWebRTC";
-import { Header } from "../components/Header";
+import React, { useRef, useState } from "react";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { CallControls } from "../components/CallControls";
+import { Header } from "../components/Header";
+import { useAuthContext } from "../hooks/useAuth";
 import { SocketProvider } from "../contexts/SocketProvider";
+import { useWebRTC } from "../hooks/useWebRTC";
+import type { User } from "../types/types";
 
 function HomePageContent() {
-  const { user, logout } = useAuthContext();
-  const localVideoRef = useRef<HTMLVideoElement>(null!);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null!);
-  const {
-    myId,
-    status,
-    incomingCall,
-    isAudioMuted,
-    isVideoEnabled,
-    handleCall,
-    handleAccept,
-    handleReject,
-    toggleAudio,
-    toggleVideo,
-  } = useWebRTC(localVideoRef, remoteVideoRef);
+    const { user, logout } = useAuthContext();
+    const localVideoRef = useRef<HTMLVideoElement>(null);
+    const remoteVideoRef = useRef<HTMLVideoElement>(null);
+    const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
 
-  if (!user) {
-    return null; // Or a loading indicator
-  }
+    const {
+        myId,
+        status,
+        incomingCall,
+        isAudioMuted,
+        isVideoEnabled,
+        handleCall,
+        handleAccept,
+        handleReject,
+        stopCall,
+        toggleAudio,
+        toggleVideo,
+    } = useWebRTC(localVideoRef, remoteVideoRef, setOnlineUsers);
 
-  return (
-    <div style={styles.appContainer}>
-      <Header user={user} onLogout={logout} />
-      <VideoPlayer
-        localVideoRef={localVideoRef}
-        remoteVideoRef={remoteVideoRef}
-      />
-      <CallControls
-        status={status}
-        myId={myId}
-        incomingCall={incomingCall}
-        onCall={handleCall}
-        onAccept={handleAccept}
-        onReject={handleReject}
-        onToggleAudio={toggleAudio}
-        onToggleVideo={toggleVideo}
-        isAudioMuted={isAudioMuted}
-        isVideoEnabled={isVideoEnabled}
-      />
-    </div>
-  );
+    if (!user) {
+        return <div>Loading...</div>;
+    }
+
+    return (
+        <div style={styles.container}>
+            <Header user={user} onLogout={logout} />
+
+            <div style={styles.body}>
+                <div style={styles.videoContainer}>
+                    <VideoPlayer videoRef={localVideoRef} muted />
+                    <VideoPlayer videoRef={remoteVideoRef} />
+                </div>
+
+                <div style={styles.usersContainer}>
+                    <h3>Онлайн ({onlineUsers.length})</h3>
+                    <ul style={styles.userList}>
+                        {onlineUsers.map((onlineUser) => (
+                            <li key={onlineUser.id} style={styles.userItem}>
+                                {onlineUser.username} ({onlineUser.id}) {onlineUser.inCall ? "В звонке" : ""}
+                                {String(onlineUser.id) !== myId && (
+                                    <button
+                                        onClick={() => handleCall(String(onlineUser.id))}
+                                        disabled={status !== "idle"}
+                                        style={styles.callButton}
+                                    >
+                                        Позвонить
+                                    </button>
+                                )}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </div>
+
+            <CallControls
+                status={status}
+                isAudioMuted={isAudioMuted}
+                isVideoEnabled={isVideoEnabled}
+                incomingCall={incomingCall}
+                onAccept={handleAccept}
+                onReject={handleReject}
+                onHangUp={stopCall}
+                onToggleAudio={toggleAudio}
+                onToggleVideo={toggleVideo}
+                myId={myId}
+                onlineUsers={onlineUsers}
+                onCall={handleCall}
+            />
+        </div>
+    );
 }
 
-function HomePage() {
-  const { user } = useAuthContext();
-
-  return (
-    <SocketProvider user={user}>
-      <HomePageContent />
-    </SocketProvider>
-  );
+export function HomePage() {
+    const { user } = useAuthContext();
+    if (!user) {
+        return <div>Loading...</div>;
+    }
+    return (
+        <SocketProvider user={user}>
+            <HomePageContent />
+        </SocketProvider>
+    );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  appContainer: {
-    maxWidth: 800,
-    margin: "0 auto",
+  container: {
+    display: "flex",
+    flexDirection: "column",
+    height: "100vh",
     padding: 20,
-    fontFamily: "sans-serif",
+  },
+  body: {
+    flex: 1,
+    display: "flex",
+    gap: 20,
+  },
+  videoContainer: {
+    flex: 3,
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  usersContainer: {
+    flex: 1,
+    borderLeft: "1px solid #eee",
+    paddingLeft: 20,
+  },
+  userList: {
+    listStyle: "none",
+    padding: 0,
+  },
+  userItem: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: "8px 0",
+  },
+  callButton: {
+    padding: "5px 10px",
+    background: "#28a745",
+    color: "#fff",
+    border: "none",
+    borderRadius: 4,
+    cursor: "pointer",
   },
 };
-
-export default HomePage;

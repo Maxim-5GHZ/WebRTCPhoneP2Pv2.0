@@ -1,41 +1,26 @@
 import {
-  createContext,
-  useContext,
   useEffect,
   useState,
-  useRef,
 } from "react";
-
-interface SocketContextType {
-  socket: WebSocket | null;
-  sendSignal: (type: string, data?: any, to?: string) => void;
-}
-
-const SocketContext = createContext<SocketContextType | null>(null);
-
-export function useSocket() {
-  const context = useContext(SocketContext);
-  if (!context) {
-    throw new Error("useSocket must be used within a SocketProvider");
-  }
-  return context;
-}
+import type { User } from "../types/types";
+import { SocketContext } from "./SocketContext";
 
 export function SocketProvider({
   user,
   children,
 }: {
-  user: any;
+  user: User;
   children: React.ReactNode;
 }) {
   const [socket, setSocket] = useState<WebSocket | null>(null);
-  const socketRef = useRef(socket);
-  socketRef.current = socket;
 
   useEffect(() => {
-    if (user && !socketRef.current) {
+    if (user) {
       const ws = new WebSocket(`ws://localhost:8080/signal?token=${user.token}`);
-      setSocket(ws);
+      
+      ws.onopen = () => {
+        setSocket(ws);
+      }
 
       ws.onclose = () => {
         setSocket(null);
@@ -47,9 +32,9 @@ export function SocketProvider({
     }
   }, [user]);
 
-  const sendSignal = (type: string, data?: any, to?: string) => {
+  const sendSignal = (message: object) => {
     if (socket?.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({ type, data, to }));
+      socket.send(JSON.stringify(message));
     }
   };
 
@@ -59,3 +44,5 @@ export function SocketProvider({
     </SocketContext.Provider>
   );
 }
+
+export { SocketContext };

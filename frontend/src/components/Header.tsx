@@ -1,7 +1,7 @@
-import type { UserData } from "../types/types";
+import type { User } from "../types/types";
 
 interface HeaderProps {
-  user: UserData;
+  user: User;
   onLogout: () => void;
 }
 
