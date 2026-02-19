@@ -31,7 +31,7 @@ public class SecurityConfig {
                         // Разрешаем вход, регистрацию, веб-сокеты и статику
                         .requestMatchers("/api/auth/**", "/signal/**", "/", "/index.html", "/static/**").permitAll()
                         // Всё остальное требует авторизации (но пока у нас её нет, это ок)
-                        .anyRequest().permitAll()
+                        .anyRequest().authenticated()
                 );
         return http.build();
     }
@@ -40,7 +40,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         // Разрешаем React (Vite - 5173, CreateReactApp - 3000)
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:5173", "http://localhost:3000", "*"));
+        configuration.setAllowedOriginPatterns(List.of("http://localhost:5173", "http://localhost:3000"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true); // Разрешаем куки/авторизацию

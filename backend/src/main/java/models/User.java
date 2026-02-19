@@ -1,10 +1,8 @@
 package models;
+
 import enums.UserActivate;
 import jakarta.persistence.*;
 import enums.UserRole;
-
-import static enums.UserActivate.Disable;
-import static enums.UserActivate.Enable;
 
 @Entity
 @Table(name = "users")
@@ -31,7 +29,7 @@ public class User {
     
     @Enumerated(EnumType.STRING)
     @Column(name="activation",nullable = false)
-    private UserActivate activation = Enable;
+    private UserActivate activation = UserActivate.Enable;
 
 
 
@@ -95,7 +93,7 @@ public class User {
                 "id=" + id +
                 ", username='" + username + '\'' +
                 ", login='" + login + '\'' +
-                "role="+role+'\''
-                +'}' ;
+                ", role=" + role +
+                '}';
     }
 }

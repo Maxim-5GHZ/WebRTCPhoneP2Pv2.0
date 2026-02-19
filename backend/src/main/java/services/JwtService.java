@@ -3,6 +3,8 @@ package services;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.security.Key;
@@ -11,8 +13,16 @@ import java.util.Date;
 @Service
 public class JwtService {
 
-    // Секретный ключ (в реальном проекте должен быть в application.properties)
-    private static final Key KEY = Keys.secretKeyFor(SignatureAlgorithm.HS256);
+    @Value("${jwt.secret}")
+    private String secret;
+
+    private Key key;
+
+    @PostConstruct
+    public void init() {
+        this.key = Keys.hmacShaKeyFor(secret.getBytes());
+    }
+
     // Токен живет 24 часа
     private static final long EXPIRATION_TIME = 86400000;
 
@@ -24,7 +34,7 @@ public class JwtService {
                 .setSubject(login)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
-                .signWith(KEY)
+                .signWith(key)
                 .compact();
     }
 
@@ -33,7 +43,7 @@ public class JwtService {
      */
     public String extractLogin(String token) {
         return Jwts.parserBuilder()
-                .setSigningKey(KEY)
+                .setSigningKey(key)
                 .build()
                 .parseClaimsJws(token)
                 .getBody()
@@ -45,7 +55,7 @@ public class JwtService {
      */
     public boolean validateToken(String token) {
         try {
-            Jwts.parserBuilder().setSigningKey(KEY).build().parseClaimsJws(token);
+            Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
             return true;
         } catch (Exception e) {
             return false;

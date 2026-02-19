@@ -2,6 +2,7 @@ package models;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 public class RegisterRequest {
 
@@ -13,6 +14,7 @@ public class RegisterRequest {
     private String login;
 
     @NotBlank(message = "Пароль не может быть пустым")
+    @Size(min = 8, message = "Пароль должен содержать не менее 8 символов")
     private String password;
 
     public String getUsername() {
@@ -39,4 +41,3 @@ public class RegisterRequest {
         this.password = password;
     }
 }
-
