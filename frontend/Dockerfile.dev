@@ -1,0 +1,20 @@
+# Use a Node.js image as the base
+FROM node:20-alpine
+
+# Set the working directory
+WORKDIR /app
+
+# Copy package.json and package-lock.json (or yarn.lock)
+COPY frontend/package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy the rest of the application code
+COPY frontend/ .
+
+# Expose the port Vite typically runs on
+EXPOSE 5173
+
+# Command to run the development server
+CMD ["npm", "run", "dev"]

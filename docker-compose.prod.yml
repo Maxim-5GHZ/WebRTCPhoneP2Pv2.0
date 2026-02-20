@@ -2,21 +2,21 @@ version: '3.8'
 
 services:
   nginx:
-    image: nginx:stable-alpine
+    image: your-registry/webrtc-nginx:latest # <-- Замените на ваш образ Nginx
     container_name: nginx_server
     restart: always
     ports:
       - "80:80"
+      - "443:443"
     volumes:
-      - ./nginx-docker/conf.d:/etc/nginx/conf.d:ro
-    depends_on:
-      - backend
-      - frontend # Add frontend dependency
+      # Пути к сертификатам на вашем сервере
+      - /etc/letsencrypt/live/webrtc.yourdomain.com/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/webrtc.yourdomain.com/privkey.pem:/etc/ssl/private/privkey.pem:ro
     networks:
       - app-network
 
   backend:
-    build: ./backend
+    image: your-registry/webrtc-backend:latest # <-- Замените на ваш образ бэкенда
     container_name: backend_server
     restart: always
     environment:
@@ -24,28 +24,11 @@ services:
       - MARIADB_DATABASE=${MARIADB_DATABASE}
       - MARIADB_USER=${MARIADB_USER}
       - MARIADB_PASSWORD=${MARIADB_PASSWORD}
-    depends_on:
-      - mariadb
     networks:
       - app-network
-
-  frontend: # New frontend service
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile.dev
-    container_name: frontend_dev_server
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules # Anonymous volume to prevent host node_modules from overriding container's
-    networks:
-      - app-network
-    depends_on:
-      - backend
 
   mariadb:
-    image: mariadb:latest
+    image: mariadb:10.9
     container_name: mariadb_server
     restart: always
     environment:
