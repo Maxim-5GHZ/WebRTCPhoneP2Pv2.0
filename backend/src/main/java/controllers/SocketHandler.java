@@ -114,8 +114,6 @@ public class SocketHandler extends TextWebSocketHandler {
     }
     private void broadcast(Map<String, Object> message) {
         sessions.values().forEach(session -> {
-            // Не отправляем сообщение самому себе
-            if (getUserId(session).equals(message.get("userId"))) return;
             try {
                 sendMessage(session, message);
             } catch (Exception e) {
@@ -191,32 +189,29 @@ public class SocketHandler extends TextWebSocketHandler {
 
 
             // Пересылаем предложение, добавляя от кого оно
-            Map<String, Object> offerPayload = new HashMap<>(payload);
-            offerPayload.put("from", fromUserId);
-            sendMessage(recipient, Map.of("type", "call-made", "offer", offerPayload, "from", fromUserId));
+            Object offer = payload.get("offer");
+            sendMessage(recipient, Map.of("type", "call-made", "offer", offer, "from", fromUserId));
         }
     }
 
     private void handleMakeAnswer(Long fromUserId, Long toUserId, Map<String, Object> payload, WebSocketSession recipient) {
-        if(!userPeers.get(fromUserId).equals(toUserId)){
+        if(!userPeers.containsKey(fromUserId) || !userPeers.get(fromUserId).equals(toUserId)){
             logger.warn("User {} is not in a call with user {}", fromUserId, toUserId);
             return;
         }
         // Просто пересылаем ответ
-        Map<String, Object> answerPayload = new HashMap<>(payload);
-        answerPayload.put("from", fromUserId);
-        sendMessage(recipient, Map.of("type", "answer-made", "answer", answerPayload, "from", fromUserId));
+        Object answer = payload.get("answer");
+        sendMessage(recipient, Map.of("type", "answer-made", "answer", answer, "from", fromUserId));
     }
 
     private void handleIceCandidate(Long fromUserId, Long toUserId, Map<String, Object> payload, WebSocketSession recipient) {
-        if(!userPeers.get(fromUserId).equals(toUserId)){
+        if(!userPeers.containsKey(fromUserId) || !userPeers.get(fromUserId).equals(toUserId)){
             logger.warn("User {} is not in a call with user {}", fromUserId, toUserId);
             return;
         }
         // Просто пересылаем ICE-кандидата
-        Map<String, Object> candidatePayload = new HashMap<>(payload);
-        candidatePayload.put("from", fromUserId);
-        sendMessage(recipient, Map.of("type", "ice-candidate", "candidate", candidatePayload, "from", fromUserId));
+        Object candidate = payload.get("candidate");
+        sendMessage(recipient, Map.of("type", "ice-candidate", "candidate", candidate, "from", fromUserId));
     }
     private void handleHangUp(Long fromUserId, Long toUserId, WebSocketSession recipient) {
         // Сбрасываем статус "в звонке" для обоих пользователей

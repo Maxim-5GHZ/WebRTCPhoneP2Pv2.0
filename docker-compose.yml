@@ -1,0 +1,51 @@
+version: '3.8'
+
+services:
+  nginx:
+    image: nginx:stable-alpine
+    container_name: nginx_server
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend/dist:/usr/share/nginx/dist:ro
+      - ./nginx-docker/conf.d:/etc/nginx/conf.d:ro
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+  backend:
+    build: ./backend
+    container_name: backend_server
+    restart: always
+    environment:
+      - MARIADB_HOST=mariadb
+      - MARIADB_DATABASE=${MARIADB_DATABASE}
+      - MARIADB_USER=${MARIADB_USER}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+    depends_on:
+      - mariadb
+    networks:
+      - app-network
+
+  mariadb:
+    image: mariadb:latest
+    container_name: mariadb_server
+    restart: always
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=${MARIADB_DATABASE}
+      - MARIADB_USER=${MARIADB_USER}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - app-network
+
+volumes:
+  mariadb_data:
+
+networks:
+  app-network:
+    driver: bridge
