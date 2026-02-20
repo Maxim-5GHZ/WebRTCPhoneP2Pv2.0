@@ -1,12 +1,25 @@
+import { useRef, useEffect } from "react";
+
 interface VideoPlayerProps {
-  videoRef: React.RefObject<HTMLVideoElement | null>;
+  stream: MediaStream | null;
   muted?: boolean;
 }
 
-export function VideoPlayer({
-  videoRef,
-  muted = false,
-}: VideoPlayerProps) {
+export function VideoPlayer({ stream, muted = false }: VideoPlayerProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]);
+
+  useEffect(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = muted;
+    }
+  }, [muted]);
+
   return (
     <div style={styles.videoWrapper}>
       <video

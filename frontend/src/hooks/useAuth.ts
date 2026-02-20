@@ -1,4 +1,4 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useMemo, useCallback } from "react";
 import type { User } from "../types/types";
 
 const API_URL = "/api/auth";
@@ -20,7 +20,7 @@ export function useAuth() {
   const [passwordInput, setPasswordInput] = useState("");
   const [usernameInput, setUsernameInput] = useState(""); // Только для регистрации
 
-  const handleAuth = async (e: React.FormEvent) => {
+  const handleAuth = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     const endpoint = authMode === "login" ? "/login" : "/register";
     const body =
@@ -48,13 +48,13 @@ export function useAuth() {
       alert("Ошибка авторизации: " + err);
       return null;
     }
-  };
+  }, [authMode, loginInput, passwordInput, usernameInput]);
 
-  const logout = () => {
+  const logout = useCallback(() => {
     setUser(null);
-  };
+  }, []);
 
-  return {
+  return useMemo(() => ({
     user,
     authMode,
     loginInput,
@@ -66,5 +66,5 @@ export function useAuth() {
     setUsernameInput,
     handleAuth,
     logout,
-  };
+  }), [user, authMode, loginInput, passwordInput, usernameInput, handleAuth, logout]);
 }

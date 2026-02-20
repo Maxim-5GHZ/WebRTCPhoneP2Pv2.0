@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { CallControls } from "../components/CallControls";
 import { Header } from "../components/Header";
@@ -9,8 +9,6 @@ import type { User } from "../types/types";
 
 function HomePageContent() {
     const { user, logout } = useAuthContext();
-    const localVideoRef = useRef<HTMLVideoElement>(null);
-    const remoteVideoRef = useRef<HTMLVideoElement>(null);
     const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
 
     const {
@@ -19,13 +17,16 @@ function HomePageContent() {
         incomingCall,
         isAudioMuted,
         isVideoEnabled,
+        localStream,
+        remoteStream,
+        isRemoteMuted,
         handleCall,
         handleAccept,
         handleReject,
         stopCall,
         toggleAudio,
         toggleVideo,
-    } = useWebRTC(localVideoRef, remoteVideoRef, setOnlineUsers);
+    } = useWebRTC(setOnlineUsers);
 
     if (!user) {
         return <div>Loading...</div>;
@@ -37,8 +38,8 @@ function HomePageContent() {
 
             <div style={styles.body}>
                 <div style={styles.videoContainer}>
-                    <VideoPlayer videoRef={localVideoRef} muted />
-                    <VideoPlayer videoRef={remoteVideoRef} />
+                    <VideoPlayer stream={localStream} muted />
+                    <VideoPlayer stream={remoteStream} muted={isRemoteMuted} />
                 </div>
 
                 <div style={styles.usersContainer}>
@@ -107,7 +108,7 @@ const styles: Record<string, React.CSSProperties> = {
   videoContainer: {
     flex: 3,
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "row",
     gap: 10,
   },
   usersContainer: {

@@ -3,12 +3,19 @@ import type { IncomingCall, SignalMessage, User } from "../types/types";
 import { useSocket } from "../hooks/useSocket";
 
 const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+  iceServers: [
+    {
+      urls: [
+        "stun:stun.l.google.com:19302",
+        "turn:openrelay.metered.ca:80",
+      ],
+      username: "openrelayproject",
+      credential: "openrelayproject",
+    },
+  ],
 };
 
 export function useWebRTC(
-  localVideoRef: React.RefObject<HTMLVideoElement | null>,
-  remoteVideoRef: React.RefObject<HTMLVideoElement | null>,
   setOnlineUsers: React.Dispatch<React.SetStateAction<User[]>>
 ) {
   const { socket, sendSignal } = useSocket();
@@ -19,19 +26,40 @@ export function useWebRTC(
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(true);
+  
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [isRemoteMuted, setIsRemoteMuted] = useState<boolean>(true);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const remoteUserIdRef = useRef<string | null>(null);
 
+  useEffect(() => {
+    const startStream = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        setLocalStream(stream);
+        localStreamRef.current = stream;
+      } catch (err) {
+        console.error("Error accessing media devices:", err);
+        alert("Не удалось получить доступ к камере/микрофону");
+      }
+    };
+    startStream();
+
+    return () => {
+      localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
 
   const stopCall = useCallback(() => {
     if (remoteUserIdRef.current) {
-        sendSignal({ type: 'hang-up', to: remoteUserIdRef.current });
+      sendSignal({ type: 'hang-up', to: remoteUserIdRef.current });
     }
-
-    localStreamRef.current?.getTracks().forEach((track) => track.stop());
-    localStreamRef.current = null;
 
     if (pcRef.current) {
       pcRef.current.close();
@@ -41,9 +69,9 @@ export function useWebRTC(
     setStatus("idle");
     setIncomingCall(null);
     remoteUserIdRef.current = null;
-    if (localVideoRef.current) localVideoRef.current.srcObject = null;
-    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-  }, [sendSignal, localVideoRef, remoteVideoRef]);
+    setRemoteStream(null);
+    setIsRemoteMuted(true);
+  }, [sendSignal]);
 
   useEffect(() => {
     if (socket) {
@@ -94,6 +122,7 @@ export function useWebRTC(
                 )
               );
               setStatus("connected");
+              setIsRemoteMuted(false);
             }
             break;
           case "ice-candidate":
@@ -119,6 +148,7 @@ export function useWebRTC(
       }
     }
   }, [socket, setOnlineUsers, stopCall]);
+  
   const createPC = (remoteId: string): RTCPeerConnection => {
     const pc = new RTCPeerConnection(RTC_CONFIG);
 
@@ -130,9 +160,7 @@ export function useWebRTC(
 
     pc.ontrack = (event) => {
       const [remoteStream] = event.streams;
-      if (remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStream;
-      }
+      setRemoteStream(remoteStream);
     };
 
     pc.onicecandidate = (event) => {
@@ -154,28 +182,9 @@ export function useWebRTC(
     return pc;
   };
 
-  const startLocalStream = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      localStreamRef.current = stream;
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-      }
-      return stream;
-    } catch (err) {
-      console.error("Error accessing media devices:", err);
-      alert("Не удалось получить доступ к камере/микрофону");
-      throw err;
-    }
-  };
-
   const handleCall = async (targetId: string) => {
-    if (!targetId) return;
+    if (!targetId || !localStreamRef.current) return;
     try {
-      await startLocalStream();
       setStatus("calling");
       remoteUserIdRef.current = targetId;
 
@@ -190,9 +199,8 @@ export function useWebRTC(
   };
 
   const handleAccept = async () => {
-    if (!incomingCall) return;
+    if (!incomingCall || !localStreamRef.current) return;
     try {
-      await startLocalStream();
       setStatus("connected");
 
       const pc = createPC(incomingCall.from);
@@ -203,6 +211,8 @@ export function useWebRTC(
       await pc.setLocalDescription(answer);
 
       sendSignal({ type: "make-answer", answer: answer, to: incomingCall.from });
+      setIncomingCall(null);
+      setIsRemoteMuted(false);
     } catch (e) {
       console.error(e);
     }
@@ -217,7 +227,8 @@ export function useWebRTC(
   const toggleAudio = () => {
     if (localStreamRef.current) {
       localStreamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = !track.enabled;        setIsAudioMuted(!track.enabled);
+        track.enabled = !track.enabled;
+        setIsAudioMuted(!track.enabled);
       });
     }
   };
@@ -237,6 +248,9 @@ export function useWebRTC(
     incomingCall,
     isAudioMuted,
     isVideoEnabled,
+    localStream,
+    remoteStream,
+    isRemoteMuted,
     handleCall,
     handleAccept,
     handleReject,
