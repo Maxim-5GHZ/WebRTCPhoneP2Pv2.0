@@ -7,8 +7,10 @@ services:
     restart: always
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx-docker/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx-docker/ssl:/etc/nginx/ssl:ro
     depends_on:
       - backend
       - frontend # Add frontend dependency
@@ -24,6 +26,9 @@ services:
       - MARIADB_DATABASE=${MARIADB_DATABASE}
       - MARIADB_USER=${MARIADB_USER}
       - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+    volumes:
+      - ./backend/src:/app/src
     depends_on:
       - mariadb
     networks:

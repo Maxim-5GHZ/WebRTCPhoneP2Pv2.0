@@ -8,7 +8,7 @@ import { useWebRTC } from "../hooks/useWebRTC";
 import type { User } from "../types/types";
 
 function HomePageContent() {
-    const { user, logout } = useAuthContext();
+    const { user, logout, toggle2FA } = useAuthContext();
     const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
 
     const {
@@ -34,7 +34,7 @@ function HomePageContent() {
 
     return (
         <div style={styles.container}>
-            <Header user={user} onLogout={logout} />
+            <Header user={user} onLogout={logout} onToggle2FA={toggle2FA} />
 
             <div style={styles.body}>
                 <div style={styles.videoContainer}>

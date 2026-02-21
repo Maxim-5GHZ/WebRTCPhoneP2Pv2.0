@@ -3,6 +3,7 @@ package models;
 import enums.UserActivate;
 import jakarta.persistence.*;
 import enums.UserRole;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "users")
@@ -30,6 +31,23 @@ public class User {
     @Enumerated(EnumType.STRING)
     @Column(name="activation",nullable = false)
     private UserActivate activation = UserActivate.Enable;
+
+    @Column(name = "two_factor_code")
+    private String twoFactorCode;
+
+    @Column(name = "two_factor_code_expires")
+    private LocalDateTime twoFactorCodeExpires;
+
+    @Column(name = "two_factor_enabled", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private Boolean twoFactorEnabled = false;
+
+    public Boolean isTwoFactorEnabled() {
+        return twoFactorEnabled;
+    }
+
+    public void setTwoFactorEnabled(Boolean twoFactorEnabled) {
+        this.twoFactorEnabled = twoFactorEnabled;
+    }
 
 
 
@@ -72,6 +90,22 @@ public class User {
 
     public void setRole(UserRole role) {
         this.role = role;
+    }
+
+    public String getTwoFactorCode() {
+        return twoFactorCode;
+    }
+
+    public void setTwoFactorCode(String twoFactorCode) {
+        this.twoFactorCode = twoFactorCode;
+    }
+
+    public LocalDateTime getTwoFactorCodeExpires() {
+        return twoFactorCodeExpires;
+    }
+
+    public void setTwoFactorCodeExpires(LocalDateTime twoFactorCodeExpires) {
+        this.twoFactorCodeExpires = twoFactorCodeExpires;
     }
     //  Реализация equals и hashCode по ID (защита от ошибок в коллекциях)
     @Override

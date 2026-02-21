@@ -3,9 +3,10 @@ import type { User } from "../types/types";
 interface HeaderProps {
   user: User;
   onLogout: () => void;
+  onToggle2FA: () => void;
 }
 
-export function Header({ user, onLogout }: HeaderProps) {
+export function Header({ user, onLogout, onToggle2FA }: HeaderProps) {
   return (
     <header style={styles.header}>
       <div>
@@ -14,9 +15,14 @@ export function Header({ user, onLogout }: HeaderProps) {
           Роль: {user.role} | Логин: {user.login}
         </small>
       </div>
-      <button onClick={onLogout} style={styles.buttonDanger}>
-        Выйти
-      </button>
+      <div>
+        <button onClick={onToggle2FA} style={styles.buttonSecondary}>
+          Переключить 2FA
+        </button>
+        <button onClick={onLogout} style={styles.buttonDanger}>
+          Выйти
+        </button>
+      </div>
     </header>
   );
 }
@@ -33,6 +39,15 @@ const styles: Record<string, React.CSSProperties> = {
   buttonDanger: {
     padding: "5px 10px",
     background: "#dc3545",
+    color: "#fff",
+    border: "none",
+    borderRadius: 4,
+    cursor: "pointer",
+    marginLeft: 10,
+  },
+  buttonSecondary: {
+    padding: "5px 10px",
+    background: "#6c757d",
     color: "#fff",
     border: "none",
     borderRadius: 4,

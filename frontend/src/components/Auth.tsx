@@ -7,6 +7,9 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
     loginInput,
     passwordInput,
     usernameInput,
+    MfaRequired,
+    loginFor2FA,
+    error,
     setAuthMode,
     setLoginInput,
     setPasswordInput,
@@ -42,6 +45,9 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
           setEmailError("");
           setAuthMode(mode);
           await handleAuth(e);
+          if (MfaRequired) {
+            navigate("/verify-2fa", { state: { login: loginFor2FA } });
+          }
         }}
         style={styles.form}
       >
@@ -76,6 +82,7 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
           style={styles.input}
           required
         />
+        {error && <p style={{ color: "red" }}>{error}</p>}
         <button type="submit" style={styles.buttonPrimary}>
           {mode === "login" ? "Войти" : "Зарегистрироваться"}
         </button>
