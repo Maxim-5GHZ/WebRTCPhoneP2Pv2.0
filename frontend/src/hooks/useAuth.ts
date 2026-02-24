@@ -108,14 +108,12 @@ export function useAuth() {
       if (res.ok) {
         const data = await res.json();
         alert(data.message);
-        if (user) {
-          setUser({ ...user, isTwoFactorEnabled: data.isTwoFactorEnabled });
-        }
+        setUser(prevUser => prevUser ? { ...prevUser, isTwoFactorEnabled: data.isTwoFactorEnabled } : null);
       }
     } catch (err) {
       setError("Ошибка при переключении 2FA: " + err);
     }
-  }, [user]);
+  }, []);
 
   return useMemo(() => ({
     user,

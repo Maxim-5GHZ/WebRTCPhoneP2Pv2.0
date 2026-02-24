@@ -1,18 +1,16 @@
 import React, { useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/useAuth';
+import { useNavigate } from 'react-router-dom';
+import { useAuthContext } from '../hooks/useAuth';
 
 const TwoFactorAuthPage: React.FC = () => {
     const [code, setCode] = useState('');
-    const { verify2FA } = useAuth();
+    const { verify2FA, loginFor2FA } = useAuthContext();
     const navigate = useNavigate();
-    const location = useLocation();
-    const { login } = location.state as { login: string };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
-            await verify2FA(login, code);
+            await verify2FA(loginFor2FA, code);
             navigate('/');
         } catch (error) {
             console.error('Failed to verify 2FA code', error);

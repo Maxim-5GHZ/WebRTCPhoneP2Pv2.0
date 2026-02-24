@@ -56,7 +56,7 @@ public class AuthController {
         try {
             User user = userRegistration.registerNewUser(request.getUsername(), request.getLogin(), request.getPassword());
             String token = jwtService.generateToken(user.getLogin());
-            return ResponseEntity.ok(new UserResponse(user.getId(), user.getUsername(), user.getLogin(), user.getRole().toString(), token));
+            return ResponseEntity.ok(new UserResponse(user.getId(), user.getUsername(), user.getLogin(), user.getRole().toString(), token, user.isTwoFactorEnabled()));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -72,10 +72,10 @@ public class AuthController {
             if (user.isTwoFactorEnabled() != null && user.isTwoFactorEnabled()) {
                 String code = twoFactorAuthenticationService.generateTwoFactorCode(user);
                 emailService.sendTwoFactorCode(user.getLogin(), code);
-                return ResponseEntity.ok(new LoginResponse("2FA_REQUIRED", null, user.getLogin(), user.getUsername(), user.getRole().toString(), user.isTwoFactorEnabled()));
+                return ResponseEntity.ok(new LoginResponse("2FA_REQUIRED", null, user.getLogin(), user.getUsername(), user.getRole().toString(), true));
             }
             String token = jwtService.generateToken(user.getLogin());
-            return ResponseEntity.ok(new LoginResponse("Authentication successful", token, user.getLogin(), user.getUsername(), user.getRole().toString(), user.isTwoFactorEnabled()));
+            return ResponseEntity.ok(new LoginResponse("Authentication successful", token, user.getLogin(), user.getUsername(), user.getRole().toString(), Optional.ofNullable(user.isTwoFactorEnabled()).orElse(false)));
         } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Неправильный пароль");
         }
