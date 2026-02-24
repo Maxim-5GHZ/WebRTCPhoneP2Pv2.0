@@ -28,6 +28,7 @@ public class SocketHandler extends TextWebSocketHandler {
     private final Map<Long, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final Map<Long, Boolean> userInCallStatus = new ConcurrentHashMap<>();
     private final Map<Long, Long> userPeers = new ConcurrentHashMap<>(); // Карта для отслеживания пиров
+    private final Object callLock = new Object();
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
 
@@ -113,11 +114,23 @@ public class SocketHandler extends TextWebSocketHandler {
         }
     }
     private void broadcast(Map<String, Object> message) {
+        String jsonMessage;
+        try {
+            jsonMessage = objectMapper.writeValueAsString(message);
+        } catch (IOException e) {
+            logger.error("Error serializing broadcast message", e);
+            return;
+        }
+
         sessions.values().forEach(session -> {
             try {
-                sendMessage(session, message);
-            } catch (Exception e) {
-                logger.error("Error broadcasting message to session {}", session.getId(), e);
+                synchronized (session) {
+                    if (session.isOpen()) {
+                        session.sendMessage(new TextMessage(jsonMessage));
+                    }
+                }
+            } catch (IOException e) {
+                logger.error("Error broadcasting message to session {}: {}", session.getId(), e.getMessage());
             }
         });
     }
@@ -128,10 +141,10 @@ public class SocketHandler extends TextWebSocketHandler {
      */
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
-        try {
-            Long fromUserId = getUserId(session);
-            if (fromUserId == null) return;
+        Long fromUserId = getUserId(session);
+        if (fromUserId == null) return;
 
+        try {
             Map<String, Object> payload = objectMapper.readValue(message.getPayload(), HashMap.class);
             String type = (String) payload.get("type");
 
@@ -167,30 +180,36 @@ public class SocketHandler extends TextWebSocketHandler {
                 default:
                     logger.warn("Unknown message type: {}", type);
             }
+        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+            logger.error("Error processing JSON in message from user {}: {}", fromUserId, e.getMessage());
+        } catch (IOException e) {
+            logger.error("IO error handling message from user {}: {}", fromUserId, e.getMessage());
         } catch (Exception e) {
-            logger.error("Error handling message: {}", e.getMessage(), e);
+            logger.error("Unexpected error handling message from user {}: {}", fromUserId, e.getMessage(), e);
         }
     }
     private void handleCallUser(WebSocketSession fromSession, Long fromUserId, Long toUserId, Map<String, Object> payload, WebSocketSession recipient) {
-        if (userInCallStatus.getOrDefault(toUserId, false)) {
-            sendMessage(fromSession, Map.of("type", "call-rejected", "reason", "User is already in a call."));
-        } else {
-            // Помечаем обоих пользователей как "в звонке"
-            userInCallStatus.put(fromUserId, true);
-            userInCallStatus.put(toUserId, true);
-            //Связываем пользователей в звонке
-            userPeers.put(fromUserId, toUserId);
-            userPeers.put(toUserId, fromUserId);
+        synchronized (callLock) {
+            if (userInCallStatus.getOrDefault(toUserId, false)) {
+                sendMessage(fromSession, Map.of("type", "call-rejected", "reason", "User is already in a call."));
+            } else {
+                // Помечаем обоих пользователей как "в звонке"
+                userInCallStatus.put(fromUserId, true);
+                userInCallStatus.put(toUserId, true);
+                //Связываем пользователей в звонке
+                userPeers.put(fromUserId, toUserId);
+                userPeers.put(toUserId, fromUserId);
 
 
-            // Уведомляем всех о том что пользователи в звонке
-            broadcast(Map.of("type", "user-in-call-status-changed", "userId", fromUserId, "inCall", true));
-            broadcast(Map.of("type", "user-in-call-status-changed", "userId", toUserId, "inCall", true));
+                // Уведомляем всех о том что пользователи в звонке
+                broadcast(Map.of("type", "user-in-call-status-changed", "userId", fromUserId, "inCall", true));
+                broadcast(Map.of("type", "user-in-call-status-changed", "userId", toUserId, "inCall", true));
 
 
-            // Пересылаем предложение, добавляя от кого оно
-            Object offer = payload.get("offer");
-            sendMessage(recipient, Map.of("type", "call-made", "offer", offer, "from", fromUserId));
+                // Пересылаем предложение, добавляя от кого оно
+                Object offer = payload.get("offer");
+                sendMessage(recipient, Map.of("type", "call-made", "offer", offer, "from", fromUserId));
+            }
         }
     }
 
