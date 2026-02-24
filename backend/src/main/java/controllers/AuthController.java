@@ -16,6 +16,7 @@ import services.TwoFactorAuthenticationService;
 import services.UserRegistration;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 
@@ -63,18 +64,21 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-        return userRepository.findByLogin(request.getLogin())
-                .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()))
-                .map(user -> {
-                    if (user.isTwoFactorEnabled()) {
-                        String code = twoFactorAuthenticationService.generateTwoFactorCode(user);
-                        emailService.sendTwoFactorCode(user.getLogin(), code);
-                        return ResponseEntity.ok(new LoginResponse("2FA_REQUIRED", null));
-                    }
-                    String token = jwtService.generateToken(user.getLogin());
-                    return ResponseEntity.ok(new LoginResponse("Authentication successful", token));
-                })
-                .orElse(ResponseEntity.status(401).build());
+        Optional<User> userOptional = userRepository.findByLogin(request.getLogin())
+                .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()));
+
+        if (userOptional.isPresent()) {
+            User user = userOptional.get();
+            if (Boolean.TRUE.equals(user.isTwoFactorEnabled())) {
+                String code = twoFactorAuthenticationService.generateTwoFactorCode(user);
+                emailService.sendTwoFactorCode(user.getLogin(), code);
+                return ResponseEntity.ok(new LoginResponse("2FA_REQUIRED", null));
+            }
+            String token = jwtService.generateToken(user.getLogin());
+            return ResponseEntity.ok(new LoginResponse("Authentication successful", token));
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Неправильный пароль");
+        }
     }
 
     @PostMapping("/verify-2fa")

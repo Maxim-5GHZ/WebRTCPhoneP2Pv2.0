@@ -1,4 +1,5 @@
 import type { User } from "../types/types";
+import { Link } from "react-router-dom";
 
 interface HeaderProps {
   user: User;
@@ -16,8 +17,13 @@ export function Header({ user, onLogout, onToggle2FA }: HeaderProps) {
         </small>
       </div>
       <div>
+        {user.role === 'Admin' && (
+          <Link to="/admin" style={styles.buttonSecondary}>
+            Admin Panel
+          </Link>
+        )}
         <button onClick={onToggle2FA} style={styles.buttonSecondary}>
-          Переключить 2FA
+          {user.isTwoFactorEnabled ? "Отключить 2FA" : "Включить 2FA"}
         </button>
         <button onClick={onLogout} style={styles.buttonDanger}>
           Выйти
@@ -52,5 +58,7 @@ const styles: Record<string, React.CSSProperties> = {
     border: "none",
     borderRadius: 4,
     cursor: "pointer",
+    textDecoration: 'none',
+    marginRight: '10px'
   },
 };

@@ -4,6 +4,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import { useAuthContext } from './hooks/useAuth';
 import TwoFactorAuthPage from "./pages/TwoFactorAuthPage.tsx";
+import AdminPage from "./pages/AdminPage.tsx";
 
 function App() {
   const { user, MfaRequired } = useAuthContext();
@@ -15,6 +16,7 @@ function App() {
         <Route path="/login" element={!user ? <LoginPage /> : <Navigate to="/" />} />
         <Route path="/register" element={!user ? <RegisterPage /> : <Navigate to="/" />} />
         <Route path="/verify-2fa" element={MfaRequired ? <TwoFactorAuthPage /> : <Navigate to="/login" />} />
+        <Route path="/admin" element={user ? <AdminPage /> : <Navigate to="/login" />} />
       </Routes>
     </Router>
   );

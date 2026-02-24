@@ -5,6 +5,7 @@ export interface User {
   role: string;
   login: string;
   inCall?: boolean;
+  isTwoFactorEnabled?: boolean;
 }
 
 export interface IncomingCall {

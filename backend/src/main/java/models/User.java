@@ -38,8 +38,8 @@ public class User {
     @Column(name = "two_factor_code_expires")
     private LocalDateTime twoFactorCodeExpires;
 
-    @Column(name = "two_factor_enabled", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
-    private Boolean twoFactorEnabled = false;
+    @Column(name = "two_factor_enabled", nullable = false)
+    private Boolean twoFactorEnabled = true;
 
     public Boolean isTwoFactorEnabled() {
         return twoFactorEnabled;
