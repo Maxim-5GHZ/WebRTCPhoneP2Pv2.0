@@ -69,7 +69,7 @@ public class AuthController {
 
         if (userOptional.isPresent()) {
             User user = userOptional.get();
-            if (Boolean.TRUE.equals(user.isTwoFactorEnabled())) {
+            if (user.isTwoFactorEnabled() != null && user.isTwoFactorEnabled()) {
                 String code = twoFactorAuthenticationService.generateTwoFactorCode(user);
                 emailService.sendTwoFactorCode(user.getLogin(), code);
                 return ResponseEntity.ok(new LoginResponse("2FA_REQUIRED", null, user.getLogin(), user.getUsername(), user.getRole().toString(), user.isTwoFactorEnabled()));
