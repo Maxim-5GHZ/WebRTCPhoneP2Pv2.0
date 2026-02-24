@@ -72,10 +72,10 @@ public class AuthController {
             if (Boolean.TRUE.equals(user.isTwoFactorEnabled())) {
                 String code = twoFactorAuthenticationService.generateTwoFactorCode(user);
                 emailService.sendTwoFactorCode(user.getLogin(), code);
-                return ResponseEntity.ok(new LoginResponse("2FA_REQUIRED", null));
+                return ResponseEntity.ok(new LoginResponse("2FA_REQUIRED", null, user.getLogin(), user.getUsername(), user.getRole().toString(), user.isTwoFactorEnabled()));
             }
             String token = jwtService.generateToken(user.getLogin());
-            return ResponseEntity.ok(new LoginResponse("Authentication successful", token));
+            return ResponseEntity.ok(new LoginResponse("Authentication successful", token, user.getLogin(), user.getUsername(), user.getRole().toString(), user.isTwoFactorEnabled()));
         } else {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Неправильный пароль");
         }
@@ -88,9 +88,9 @@ public class AuthController {
                 .map(user -> {
                     twoFactorAuthenticationService.clearTwoFactorCode(user);
                     String token = jwtService.generateToken(user.getLogin());
-                    return ResponseEntity.ok(new LoginResponse("Authentication successful", token));
+                    return ResponseEntity.ok(new LoginResponse("Authentication successful", token, user.getLogin(), user.getUsername(), user.getRole().toString(), user.isTwoFactorEnabled()));
                 })
-                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new LoginResponse("Invalid 2FA code", null)));
+                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new LoginResponse("Invalid 2FA code", null, null, null, null, false)));
     }
 
     @PostMapping("/toggle-2fa")
