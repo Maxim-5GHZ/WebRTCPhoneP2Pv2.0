@@ -61,6 +61,7 @@ public class User {
         this.login = login;
         this.password = password;
         this.role= role;
+        this.twoFactorEnabled = true;
     }
 
 

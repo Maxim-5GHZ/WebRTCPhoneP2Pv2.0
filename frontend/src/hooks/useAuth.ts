@@ -22,11 +22,13 @@ export function useAuth() {
   const [MfaRequired, setMfaRequired] = useState<boolean>(false)
   const [loginFor2FA, setLoginFor2FA] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
 
   const handleAuth = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setLoading(true);
     const endpoint = authMode === "login" ? "/login" : "/register";
     const body =
       authMode === "login"
@@ -45,10 +47,14 @@ export function useAuth() {
       });
 
       if (!res.ok) {
-        setError(await res.text());
+        try {
+          const errorData = await res.json();
+          setError(errorData.message || 'An error occurred');
+        } catch (e) {
+          setError(await res.text());
+        }
         return null;
       }
-
       const data = await res.json();
       console.log('Server response:', data);
       if (data.message === '2FA_REQUIRED') {
@@ -62,12 +68,15 @@ export function useAuth() {
     } catch (err) {
       setError("Ошибка авторизации: " + err);
       return null;
+    } finally {
+      setLoading(false);
     }
   }, [authMode, loginInput, passwordInput, usernameInput]);
 
   const verify2FA = useCallback(async (login:string, code: string) => {
     try {
       setError(null);
+      setLoading(true);
       const res = await fetch(`${API_URL}/verify-2fa`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -75,7 +84,12 @@ export function useAuth() {
       });
 
       if (!res.ok) {
-        setError(await res.text());
+        try {
+          const errorData = await res.json();
+          setError(errorData.message || 'An error occurred');
+        } catch (e) {
+          setError(await res.text());
+        }
         return null;
       }
 
@@ -89,6 +103,8 @@ export function useAuth() {
     } catch (err) {
       setError("Ошибка верификации 2FA: " + err);
       return null;
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -101,6 +117,7 @@ export function useAuth() {
     const token = localStorage.getItem('token');
     if(!token) return;
     try {
+      setLoading(true);
       const res = await fetch(`${API_URL}/toggle-2fa`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` },
@@ -112,6 +129,8 @@ export function useAuth() {
       }
     } catch (err) {
       setError("Ошибка при переключении 2FA: " + err);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -124,6 +143,7 @@ export function useAuth() {
     MfaRequired,
     loginFor2FA,
     error,
+    loading,
     setAuthMode,
     setLoginInput,
     setPasswordInput,
@@ -132,5 +152,5 @@ export function useAuth() {
     logout,
     verify2FA,
     toggle2FA,
-  }), [user, authMode, loginInput, passwordInput, usernameInput, MfaRequired, loginFor2FA, error, handleAuth, logout, verify2FA, toggle2FA]);
+  }), [user, authMode, loginInput, passwordInput, usernameInput, MfaRequired, loginFor2FA, error, loading, handleAuth, logout, verify2FA, toggle2FA]);
 }

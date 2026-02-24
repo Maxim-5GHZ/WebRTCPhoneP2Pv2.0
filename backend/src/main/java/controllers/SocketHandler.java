@@ -180,8 +180,6 @@ public class SocketHandler extends TextWebSocketHandler {
                 default:
                     logger.warn("Unknown message type: {}", type);
             }
-        } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            logger.error("Error processing JSON in message from user {}: {}", fromUserId, e.getMessage());
         } catch (IOException e) {
             logger.error("IO error handling message from user {}: {}", fromUserId, e.getMessage());
         } catch (Exception e) {

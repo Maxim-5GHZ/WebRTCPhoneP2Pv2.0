@@ -1,20 +1,36 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuthContext } from '../hooks/useAuth';
 
 const TwoFactorAuthPage: React.FC = () => {
     const [code, setCode] = useState('');
-    const { verify2FA, loginFor2FA } = useAuthContext();
+    const { verify2FA, loading, error } = useAuthContext();
     const navigate = useNavigate();
+    const location = useLocation();
+    const login = location.state?.login;
+
+    useEffect(() => {
+        if (!login) {
+            // Redirect or show an error if the login is not in the state
+            console.error("Login information is missing for 2FA verification.");
+            navigate('/login');
+        }
+    }, [login, navigate]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!login) {
+            console.error("Cannot verify 2FA without login information.");
+            return;
+        }
         try {
-            await verify2FA(loginFor2FA, code);
-            navigate('/');
+            const result = await verify2FA(login, code);
+            if (result) {
+              navigate('/');
+            }
         } catch (error) {
             console.error('Failed to verify 2FA code', error);
-            // Handle error (e.g., show an error message)
+            // Error is already handled in the context
         }
     };
 
@@ -32,7 +48,10 @@ const TwoFactorAuthPage: React.FC = () => {
                         required
                     />
                 </div>
-                <button type="submit">Verify</button>
+                {error && <p style={{ color: "red" }}>{error}</p>}
+                <button type="submit" disabled={loading || !login}>
+                    {loading ? 'Verifying...' : 'Verify'}
+                </button>
             </form>
         </div>
     );
