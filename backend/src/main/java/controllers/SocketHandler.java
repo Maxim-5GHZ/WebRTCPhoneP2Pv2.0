@@ -90,22 +90,24 @@ public class SocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
         Long userId = getUserId(session);
         if (userId != null) {
-            // Если пользователь был в звонке, уведомляем его собеседника
-            if (userPeers.containsKey(userId)) {
-                Long peerId = userPeers.get(userId);
-                WebSocketSession peerSession = sessions.get(peerId);
-                if (peerSession != null && peerSession.isOpen()) {
-                    sendMessage(peerSession, Map.of("type", "hang-up", "from", userId));
+            synchronized (callLock) {
+                // Если пользователь был в звонке, уведомляем его собеседника
+                if (userPeers.containsKey(userId)) {
+                    Long peerId = userPeers.get(userId);
+                    WebSocketSession peerSession = sessions.get(peerId);
+                    if (peerSession != null && peerSession.isOpen()) {
+                        sendMessage(peerSession, Map.of("type", "hang-up", "from", userId));
+                    }
+                    userPeers.remove(peerId);
+                    userInCallStatus.put(peerId, false);
+                    broadcast(Map.of("type", "user-in-call-status-changed", "userId", peerId, "inCall", false));
+
                 }
-                userPeers.remove(peerId);
-                userInCallStatus.put(peerId, false);
-                broadcast(Map.of("type", "user-in-call-status-changed", "userId", peerId, "inCall", false));
 
+                sessions.remove(userId);
+                userInCallStatus.remove(userId); // Удаление статуса звонка
+                userPeers.remove(userId);
             }
-
-            sessions.remove(userId);
-            userInCallStatus.remove(userId); // Удаление статуса звонка
-            userPeers.remove(userId);
 
             logger.info("[Disconnected] User ID: {}", userId);
 
@@ -177,6 +179,9 @@ public class SocketHandler extends TextWebSocketHandler {
                 case "hang-up":
                     handleHangUp(fromUserId, toUserId, recipient);
                     break;
+                case "request-turn-renegotiation":
+                    sendMessage(recipient, Map.of("type", "request-turn-renegotiation", "from", fromUserId));
+                    break;
                 default:
                     logger.warn("Unknown message type: {}", type);
             }
@@ -206,7 +211,15 @@ public class SocketHandler extends TextWebSocketHandler {
 
                 // Пересылаем предложение, добавляя от кого оно
                 Object offer = payload.get("offer");
-                sendMessage(recipient, Map.of("type", "call-made", "offer", offer, "from", fromUserId));
+                Map<String, Object> messageMap = new HashMap<>();
+                messageMap.put("type", "call-made");
+                messageMap.put("offer", offer);
+                messageMap.put("from", fromUserId);
+                // Forward the useTurn flag if it exists
+                if (payload.containsKey("useTurn")) {
+                    messageMap.put("useTurn", payload.get("useTurn"));
+                }
+                sendMessage(recipient, messageMap);
             }
         }
     }
@@ -218,7 +231,15 @@ public class SocketHandler extends TextWebSocketHandler {
         }
         // Просто пересылаем ответ
         Object answer = payload.get("answer");
-        sendMessage(recipient, Map.of("type", "answer-made", "answer", answer, "from", fromUserId));
+        Map<String, Object> messageMap = new HashMap<>();
+        messageMap.put("type", "answer-made");
+        messageMap.put("answer", answer);
+        messageMap.put("from", fromUserId);
+        // Forward the useTurn flag if it exists
+        if (payload.containsKey("useTurn")) {
+            messageMap.put("useTurn", payload.get("useTurn"));
+        }
+        sendMessage(recipient, messageMap);
     }
 
     private void handleIceCandidate(Long fromUserId, Long toUserId, Map<String, Object> payload, WebSocketSession recipient) {
@@ -231,20 +252,22 @@ public class SocketHandler extends TextWebSocketHandler {
         sendMessage(recipient, Map.of("type", "ice-candidate", "candidate", candidate, "from", fromUserId));
     }
     private void handleHangUp(Long fromUserId, Long toUserId, WebSocketSession recipient) {
-        // Сбрасываем статус "в звонке" для обоих пользователей
-        userInCallStatus.put(fromUserId, false);
-        userInCallStatus.put(toUserId, false);
+        synchronized (callLock) {
+            // Сбрасываем статус "в звонке" для обоих пользователей
+            userInCallStatus.put(fromUserId, false);
+            userInCallStatus.put(toUserId, false);
 
-        // Убираем связь
-        userPeers.remove(fromUserId);
-        userPeers.remove(toUserId);
+            // Убираем связь
+            userPeers.remove(fromUserId);
+            userPeers.remove(toUserId);
 
-        // Уведомляем всех о том что пользователи не в звонке
-        broadcast(Map.of("type", "user-in-call-status-changed", "userId", fromUserId, "inCall", false));
-        broadcast(Map.of("type", "user-in-call-status-changed", "userId", toUserId, "inCall", false));
+            // Уведомляем всех о том что пользователи не в звонке
+            broadcast(Map.of("type", "user-in-call-status-changed", "userId", fromUserId, "inCall", false));
+            broadcast(Map.of("type", "user-in-call-status-changed", "userId", toUserId, "inCall", false));
 
-        // Уведомляем другого пользователя о завершении звонка
-        sendMessage(recipient, Map.of("type", "hang-up", "from", fromUserId));
+            // Уведомляем другого пользователя о завершении звонка
+            sendMessage(recipient, Map.of("type", "hang-up", "from", fromUserId));
+        }
     }
 
 

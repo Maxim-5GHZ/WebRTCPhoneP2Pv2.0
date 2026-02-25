@@ -19,6 +19,8 @@ services:
     build: ./backend
     container_name: backend_server
     restart: always
+    env_file:
+      - .env
     environment:
       - MARIADB_HOST=mariadb
       - MARIADB_DATABASE=${MARIADB_DATABASE}
@@ -29,6 +31,7 @@ services:
       - ./backend/src:/app/src
     depends_on:
       - mariadb
+      - coturn
     networks:
       - app-network
 
@@ -60,6 +63,22 @@ services:
       - MARIADB_PASSWORD=${MARIADB_PASSWORD}
     volumes:
       - mariadb_data:/var/lib/mysql
+    networks:
+      - app-network
+
+  coturn:
+    image: coturn/coturn
+    container_name: coturn_server
+    restart: always
+    env_file:
+      - .env
+    command: turnserver -c /etc/coturn/turnserver.conf --static-auth-secret=${TURN_PASSWORD} -v -L /tmp/turnserver.log
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49152-65535:49152-65535/udp" # Add this range for media relay
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
     networks:
       - app-network
 

@@ -2,16 +2,18 @@ import { useState } from "react";
 import type { IncomingCall, User } from "../types/types";
 
 interface CallControlsProps {
-  myId: string,
+  myId: string;
   status: "idle" | "calling" | "ringing" | "connected";
   onlineUsers: User[];
   incomingCall: IncomingCall | null;
-  onCall: (targetId: string) => void;
-  onAccept: () => void;
+  renegotiationRequired: boolean;
+  onCall: (targetId: string, useTurn: boolean) => void;
+  onAccept: (useTurn: boolean) => void;
   onReject: () => void;
   onHangUp: () => void;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
+  onRenegotiate: () => void;
   isAudioMuted: boolean;
   isVideoEnabled: boolean;
 }
@@ -21,12 +23,14 @@ export function CallControls({
   status,
   onlineUsers,
   incomingCall,
+  renegotiationRequired,
   onCall,
   onAccept,
   onReject,
   onHangUp,
   onToggleAudio,
   onToggleVideo,
+  onRenegotiate,
   isAudioMuted,
   isVideoEnabled,
 }: CallControlsProps) {
@@ -42,14 +46,16 @@ export function CallControls({
             style={styles.input}
           >
             <option value="">Выберите пользователя</option>
-            {onlineUsers.filter(user => user.id !== myId).map((user) => (
-              <option key={user.id} value={user.id} disabled={user.inCall}>
-                {user.username} {user.inCall ? " (в звонке)" : ""}
-              </option>
-            ))}
+            {onlineUsers
+              .filter((user) => user.id !== myId)
+              .map((user) => (
+                <option key={user.id} value={user.id} disabled={user.inCall}>
+                  {user.username} {user.inCall ? " (в звонке)" : ""}
+                </option>
+              ))}
           </select>
           <button
-            onClick={() => onCall(selectedUserId)}
+            onClick={() => onCall(selectedUserId, false)}
             disabled={!selectedUserId}
           >
             Видеозвонок
@@ -60,9 +66,12 @@ export function CallControls({
       {status === "ringing" && (
         <div style={styles.incomingBox}>
           <p>Входящий от: {incomingCall?.from}</p>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={onAccept} style={styles.buttonSuccess}>
-              Принять (Видео)
+          <div style={{ display: "flex", gap: 10, justifyContent: 'center' }}>
+            <button onClick={() => onAccept(false)} style={styles.buttonSuccess}>
+              Принять (P2P)
+            </button>
+            <button onClick={() => onAccept(true)} style={styles.buttonPrimary}>
+              Принять (Relay)
             </button>
             <button onClick={onReject} style={styles.buttonDanger}>
               Отклонить
@@ -81,13 +90,20 @@ export function CallControls({
           </button>
           <button
             onClick={onToggleVideo}
-            style={!isVideoEnabled ? styles.buttonWarning : styles.buttonPrimary}
+            style={
+              !isVideoEnabled ? styles.buttonWarning : styles.buttonPrimary
+            }
           >
             {!isVideoEnabled ? "Включить видео" : "Выключить видео"}
           </button>
           <button onClick={onHangUp} style={styles.buttonDanger}>
             Завершить звонок
           </button>
+          {renegotiationRequired && (
+            <button onClick={onRenegotiate} style={styles.buttonWarning}>
+              Переподключиться (TURN)
+            </button>
+          )}
         </div>
       )}
 

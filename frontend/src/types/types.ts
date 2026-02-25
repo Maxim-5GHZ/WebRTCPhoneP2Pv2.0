@@ -11,10 +11,22 @@ export interface User {
 export interface IncomingCall {
     from: string;
     offer: RTCSessionDescriptionInit;
+    useTurn?: boolean;
 }
 
 export interface SignalMessage {
-    type: string;
+    type: "connection-success"
+    | "user-connected"
+    | "user-disconnected"
+    | "user-in-call-status-changed"
+    | "call-made"
+    | "answer-made"
+    | "ice-candidate"
+    | "call-rejected"
+    | "hang-up"
+    | "call-user"
+    | "make-answer"
+    | "request-turn-renegotiation";
     myId?: string;
     data?: any;
     userId?: string;
@@ -26,4 +38,5 @@ export interface SignalMessage {
     candidate?: RTCIceCandidateInit;
     reason?: string;
     to?: string;
+    useTurn?: boolean;
 }

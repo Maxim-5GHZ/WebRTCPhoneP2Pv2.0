@@ -2,18 +2,22 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import type { IncomingCall, SignalMessage, User } from "../types/types";
 import { useSocket } from "../hooks/useSocket";
 
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [
-    {
-      urls: [
-        "stun:stun.l.google.com:19302",
-        "turn:openrelay.metered.ca:80",
-      ],
-      username: "openrelayproject",
-      credential: "openrelayproject",
-    },
-  ],
-};
+async function getIceServers(useTurn: boolean): Promise<RTCConfiguration> {
+  try {
+    const response = await fetch(`/api/v1/webrtc/ice-servers?useTurn=${useTurn}`);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ICE servers: ${response.status}`);
+    }
+    const servers = await response.json();
+    return { iceServers: servers };
+  } catch (error) {
+    console.error("Could not get ICE servers, falling back to default STUN", error);
+    // Fallback to a public STUN server if the backend is unavailable
+    return {
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+    };
+  }
+}
 
 export function useWebRTC(
   setOnlineUsers: React.Dispatch<React.SetStateAction<User[]>>
@@ -26,7 +30,9 @@ export function useWebRTC(
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(true);
-  
+  const [renegotiationRequired, setRenegotiationRequired] = useState<boolean>(false);
+
+
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [isRemoteMuted, setIsRemoteMuted] = useState<boolean>(true);
@@ -71,6 +77,7 @@ export function useWebRTC(
     remoteUserIdRef.current = null;
     setRemoteStream(null);
     setIsRemoteMuted(true);
+    setRenegotiationRequired(false);
   }, [sendSignal]);
 
   useEffect(() => {
@@ -109,6 +116,7 @@ export function useWebRTC(
               setIncomingCall({
                 from: String(msg.from),
                 offer: msg.offer as RTCSessionDescriptionInit,
+                useTurn: msg.useTurn,
               });
               setStatus("ringing");
               remoteUserIdRef.current = String(msg.from);
@@ -149,8 +157,9 @@ export function useWebRTC(
     }
   }, [socket, setOnlineUsers, stopCall]);
   
-  const createPC = (remoteId: string): RTCPeerConnection => {
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+  const createPC = async (remoteId: string, useTurn: boolean = false): Promise<RTCPeerConnection> => {
+    const config = await getIceServers(useTurn);
+    const pc = new RTCPeerConnection(config);
 
     localStreamRef.current?.getTracks().forEach((track) => {
       if (localStreamRef.current) {
@@ -173,7 +182,10 @@ export function useWebRTC(
     };
 
     pc.onconnectionstatechange = () => {
-      if (["disconnected", "failed", "closed"].includes(pc.connectionState)) {
+      if (pc.connectionState === "failed") {
+        setRenegotiationRequired(true);
+      }
+      if (["disconnected", "closed"].includes(pc.connectionState)) {
         stopCall();
       }
     };
@@ -182,35 +194,38 @@ export function useWebRTC(
     return pc;
   };
 
-  const handleCall = async (targetId: string) => {
+  const handleCall = async (targetId: string, useTurn: boolean = false) => {
     if (!targetId || !localStreamRef.current) return;
     try {
       setStatus("calling");
       remoteUserIdRef.current = targetId;
 
-      const pc = createPC(targetId);
+      const pc = await createPC(targetId, useTurn);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      sendSignal({ type: "call-user", offer: offer, to: targetId });
+      sendSignal({ type: "call-user", offer: offer, to: targetId, useTurn });
     } catch (e) {
       console.error(e);
     }
   };
 
-  const handleAccept = async () => {
+  const handleAccept = async (useTurn: boolean = false) => {
     if (!incomingCall || !localStreamRef.current) return;
     try {
       setStatus("connected");
 
-      const pc = createPC(incomingCall.from);
+      // The decision to use TURN is made by the acceptor.
+      // The initial `useTurn` from the offer is a suggestion.
+      const pc = await createPC(incomingCall.from, useTurn);
       await pc.setRemoteDescription(
         new RTCSessionDescription(incomingCall.offer)
       );
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      sendSignal({ type: "make-answer", answer: answer, to: incomingCall.from });
+      // Send the answer back, confirming the connection method.
+      sendSignal({ type: "make-answer", answer: answer, to: incomingCall.from, useTurn });
       setIncomingCall(null);
       setIsRemoteMuted(false);
     } catch (e) {
@@ -222,6 +237,14 @@ export function useWebRTC(
     const id = incomingCall?.from;
     if (id) sendSignal({ type: "hang-up", to: id });
     stopCall();
+  };
+
+  const handleRenegotiate = () => {
+    if (remoteUserIdRef.current) {
+      const remoteId = remoteUserIdRef.current;
+      stopCall(); // This will hang up the call for both users.
+      handleCall(remoteId, true); // Immediately try to call again, forcing TURN.
+    }
   };
 
   const toggleAudio = () => {
@@ -251,12 +274,13 @@ export function useWebRTC(
     localStream,
     remoteStream,
     isRemoteMuted,
+    renegotiationRequired,
     handleCall,
     handleAccept,
     handleReject,
     stopCall,
     toggleAudio,
     toggleVideo,
+    handleRenegotiate,
   };
 }
-

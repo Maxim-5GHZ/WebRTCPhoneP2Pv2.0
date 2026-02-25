@@ -10,6 +10,7 @@ import type { User } from "../types/types";
 function HomePageContent() {
     const { user, logout, toggle2FA } = useAuthContext();
     const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
+    const [useTurn, setUseTurn] = useState(false);
 
     const {
         myId,
@@ -20,12 +21,14 @@ function HomePageContent() {
         localStream,
         remoteStream,
         isRemoteMuted,
+        renegotiationRequired,
         handleCall,
         handleAccept,
         handleReject,
         stopCall,
         toggleAudio,
         toggleVideo,
+        handleRenegotiate,
     } = useWebRTC(setOnlineUsers);
 
     if (!user) {
@@ -44,13 +47,22 @@ function HomePageContent() {
 
                 <div style={styles.usersContainer}>
                     <h3>Онлайн ({onlineUsers.length})</h3>
+                    <div style={styles.turnCheckboxContainer}>
+                        <input
+                            type="checkbox"
+                            id="useTurn"
+                            checked={useTurn}
+                            onChange={(e) => setUseTurn(e.target.checked)}
+                        />
+                        <label htmlFor="useTurn">Использовать Relay (TURN)</label>
+                    </div>
                     <ul style={styles.userList}>
                         {onlineUsers.map((onlineUser) => (
                             <li key={onlineUser.id} style={styles.userItem}>
                                 {onlineUser.username} ({onlineUser.id}) {onlineUser.inCall ? "В звонке" : ""}
                                 {String(onlineUser.id) !== myId && (
                                     <button
-                                        onClick={() => handleCall(String(onlineUser.id))}
+                                        onClick={() => handleCall(String(onlineUser.id), useTurn)}
                                         disabled={status !== "idle"}
                                         style={styles.callButton}
                                     >
@@ -68,11 +80,13 @@ function HomePageContent() {
                 isAudioMuted={isAudioMuted}
                 isVideoEnabled={isVideoEnabled}
                 incomingCall={incomingCall}
+                renegotiationRequired={renegotiationRequired}
                 onAccept={handleAccept}
                 onReject={handleReject}
                 onHangUp={stopCall}
                 onToggleAudio={toggleAudio}
                 onToggleVideo={toggleVideo}
+                onRenegotiate={handleRenegotiate}
                 myId={myId}
                 onlineUsers={onlineUsers}
                 onCall={handleCall}
@@ -134,4 +148,9 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     cursor: "pointer",
   },
+    turnCheckboxContainer: {
+        marginBottom: '10px',
+        display: 'flex',
+        alignItems: 'center',
+    },
 };
