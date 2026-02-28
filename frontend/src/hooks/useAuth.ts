@@ -47,11 +47,12 @@ export function useAuth() {
       });
 
       if (!res.ok) {
+        const errorText = await res.text();
         try {
-          const errorData = await res.json();
+          const errorData = JSON.parse(errorText);
           setError(errorData.message || 'An error occurred');
         } catch (e) {
-          setError(await res.text());
+          setError(errorText);
         }
         return null;
       }
@@ -84,11 +85,12 @@ export function useAuth() {
       });
 
       if (!res.ok) {
+        const errorText = await res.text();
         try {
-          const errorData = await res.json();
+          const errorData = JSON.parse(errorText);
           setError(errorData.message || 'An error occurred');
         } catch (e) {
-          setError(await res.text());
+          setError(errorText);
         }
         return null;
       }

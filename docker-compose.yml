@@ -40,6 +40,8 @@ services:
     restart: unless-stopped
     ports:
       - "3306:3306"
+    env_file:
+      - .env
     environment:
       - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
       - MARIADB_DATABASE=${MARIADB_DATABASE}
