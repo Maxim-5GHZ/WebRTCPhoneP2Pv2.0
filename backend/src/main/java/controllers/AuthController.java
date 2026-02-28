@@ -93,23 +93,6 @@ public class AuthController {
                 .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new LoginResponse("Invalid 2FA code", null, null, null, null, false)));
     }
 
-    @PostMapping("/toggle-2fa")
-    public ResponseEntity<?> toggleTwoFactor() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        String currentPrincipalName = authentication.getName();
-        User user = userRepository.findByLogin(currentPrincipalName).orElse(null);
-        if (user == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        user.setTwoFactorEnabled(!user.isTwoFactorEnabled());
-        userRepository.save(user);
-
-        String message = "Two-factor authentication has been " + (user.isTwoFactorEnabled() ? "enabled" : "disabled");
-        return ResponseEntity.ok(new TwoFactorResponse(message, user.isTwoFactorEnabled()));
-    }
-
-
     @GetMapping("/users/online")
     public ResponseEntity<List<OnlineUserResponse>> getOnlineUsers() {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();

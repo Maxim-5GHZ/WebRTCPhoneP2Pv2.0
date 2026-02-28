@@ -117,24 +117,49 @@ export function useAuth() {
 
   const toggle2FA = useCallback(async () => {
     const token = localStorage.getItem('token');
-    if(!token) return;
+    if(!token || !user) return; // Ensure user is not null
+
+    const originalTwoFactorEnabled = user.isTwoFactorEnabled; // Store original state
+    
+    // Optimistically update the UI
+    setUser(prevUser => prevUser ? { ...prevUser, isTwoFactorEnabled: !originalTwoFactorEnabled } : null);
+
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/toggle-2fa`, {
+      const res = await fetch(`/api/user/2fa/toggle`, {
         method: "POST",
         headers: { "Authorization": `Bearer ${token}` },
       });
       if (res.ok) {
         const data = await res.json();
+        console.log("toggle2FA response:", data);
         alert(data.message);
-        setUser(prevUser => prevUser ? { ...prevUser, isTwoFactorEnabled: data.isTwoFactorEnabled } : null);
+        // The user state is already updated optimistically, so no need to update it here unless the backend sends back a different state.
+        // If the backend is authoritative, we would use data.isTwoFactorEnabled here.
+        // For now, assume optimistic update is correct unless an error occurs.
+      } else {
+        // Revert on error
+        setUser(prevUser => prevUser ? { ...prevUser, isTwoFactorEnabled: originalTwoFactorEnabled } : null);
+        const errorText = await res.text();
+        try {
+          const errorData = JSON.parse(errorText);
+          setError(errorData.message || 'An error occurred');
+          alert(errorData.message || 'An error occurred');
+        } catch (e) {
+          setError(errorText);
+          alert(errorText);
+        }
       }
     } catch (err) {
+      // Revert on network error
+      setUser(prevUser => prevUser ? { ...prevUser, isTwoFactorEnabled: originalTwoFactorEnabled } : null);
       setError("Ошибка при переключении 2FA: " + err);
+      alert("Ошибка при переключении 2FA: " + err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]); // Add user to dependency array
+
 
   return useMemo(() => ({
     user,

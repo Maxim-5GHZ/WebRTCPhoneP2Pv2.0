@@ -12,6 +12,8 @@ function HomePageContent() {
     const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
     const [useTurn, setUseTurn] = useState(false);
 
+    console.log("User object in HomePageContent:", user);
+
     const {
         myId,
         status,

@@ -34,4 +34,9 @@ public class TwoFactorAuthenticationService {
         user.setTwoFactorCodeExpires(null);
         userRepository.save(user);
     }
+
+    public void toggle2FA(User user) {
+        user.setTwoFactorEnabled(!user.isTwoFactorEnabled());
+        userRepository.save(user);
+    }
 }
