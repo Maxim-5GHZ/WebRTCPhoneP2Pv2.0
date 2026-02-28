@@ -5,9 +5,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -15,6 +15,7 @@ import repositories.UserRepository;
 import services.JwtService;
 
 import java.io.IOException;
+import java.util.Collections;
 
 @Component
 public class JwtRequestFilter extends OncePerRequestFilter {
@@ -43,11 +44,11 @@ public class JwtRequestFilter extends OncePerRequestFilter {
 
         if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
             if (jwtService.validateToken(jwt)) {
-                // Here you would typically load UserDetails from a UserDetailsService
-                // For simplicity, we'll use an in-memory list of users for now
-                // In a real app, you'd fetch from your user repository
                 UserDetails userDetails = userRepository.findByLogin(username)
-                        .map(user -> new org.springframework.security.core.userdetails.User(user.getLogin(), user.getPassword(), new java.util.ArrayList<>()))
+                        .map(user -> new org.springframework.security.core.userdetails.User(
+                                user.getLogin(),
+                                user.getPassword(),
+                                Collections.singletonList(new SimpleGrantedAuthority(user.getRole().name()))))
                         .orElse(null);
 
                 if (userDetails != null) {

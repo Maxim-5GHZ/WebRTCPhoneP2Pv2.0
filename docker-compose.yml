@@ -1,8 +1,10 @@
 services:
   nginx:
-    image: nginx:stable-alpine
-    container_name: nginx_server
-    restart: always
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nginx_prod_server
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
@@ -11,14 +13,13 @@ services:
       - ./nginx-docker/ssl:/etc/nginx/ssl:ro
     depends_on:
       - backend
-      - frontend # Add frontend dependency
     networks:
       - app-network
 
   backend:
     build: ./backend
-    container_name: backend_server
-    restart: always
+    container_name: backend_prod_server
+    restart: unless-stopped
     env_file:
       - .env
     environment:
@@ -27,33 +28,16 @@ services:
       - MARIADB_USER=${MARIADB_USER}
       - MARIADB_PASSWORD=${MARIADB_PASSWORD}
       - MAIL_PASSWORD=${MAIL_PASSWORD}
-    volumes:
-      - ./backend/src:/app/src
     depends_on:
       - mariadb
       - coturn
     networks:
       - app-network
 
-  frontend: # New frontend service
-    build:
-      context: .
-      dockerfile: frontend/Dockerfile.dev
-    container_name: frontend_dev_server
-    ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules # Anonymous volume to prevent host node_modules from overriding container's
-    networks:
-      - app-network
-    depends_on:
-      - backend
-
   mariadb:
-    image: mariadb:latest
+    image: mariadb:10.9
     container_name: mariadb_server
-    restart: always
+    restart: unless-stopped
     ports:
       - "3306:3306"
     environment:
@@ -69,14 +53,14 @@ services:
   coturn:
     image: coturn/coturn
     container_name: coturn_server
-    restart: always
+    restart: unless-stopped
     env_file:
       - .env
     command: turnserver -c /etc/coturn/turnserver.conf --static-auth-secret=${TURN_PASSWORD} -v -L /tmp/turnserver.log
     ports:
       - "3478:3478/tcp"
       - "3478:3478/udp"
-      - "49152-65535:49152-65535/udp" # Add this range for media relay
+      - "49152-49351:49152-49351/udp" # Add this range for media relay
     volumes:
       - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
     networks:

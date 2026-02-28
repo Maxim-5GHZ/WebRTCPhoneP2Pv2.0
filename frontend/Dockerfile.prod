@@ -1,0 +1,16 @@
+# Stage 1: Build the React application
+FROM node:18-alpine AS build
+WORKDIR /app
+COPY package.json ./
+COPY package-lock.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# Stage 2: Serve the static files with Nginx
+FROM nginx:1.25.3-alpine-slim
+COPY --from=build /app/dist /usr/share/nginx/html
+# We expose 80, as this is the standard nginx port inside the container.
+# Nginx will handle serving the static files.
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
