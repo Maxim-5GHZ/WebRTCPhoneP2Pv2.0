@@ -4,6 +4,7 @@ export interface User {
   token: string;
   role: string;
   login: string;
+  activation: 'Enable' | 'Disable';
   inCall?: boolean;
   isTwoFactorEnabled?: boolean;
 }
