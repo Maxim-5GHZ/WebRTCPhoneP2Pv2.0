@@ -31,7 +31,7 @@ function HomePageContent() {
         toggleAudio,
         toggleVideo,
         handleRenegotiate,
-    } = useWebRTC(setOnlineUsers);
+    } = useWebRTC(setOnlineUsers, user?.token || "");
 
     if (!user) {
         return <div>Loading...</div>;

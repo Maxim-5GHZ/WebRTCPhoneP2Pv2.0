@@ -6,6 +6,11 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: true,
+    hmr: {
+      protocol: 'wss',
+      host: process.env.VITE_HMR_HOST || 'localhost',
+      clientPort: 443,
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8080',

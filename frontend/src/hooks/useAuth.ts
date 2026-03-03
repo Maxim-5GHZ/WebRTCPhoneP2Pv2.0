@@ -40,25 +40,24 @@ export function useAuth() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true); // Start with loading true for initial auth check
 
-  const processLoginResponse = useCallback((data: { token: string }) => {
-    const decodedToken = decodeJwt(data.token);
-    if (decodedToken) {
-      const userData: User = {
-        id: decodedToken.id,
-        username: decodedToken.sub,
-        login: decodedToken.login,
-        role: decodedToken.roles[0], // Assuming the first role is the primary one
-        token: data.token,
-        isTwoFactorEnabled: decodedToken.isTwoFactorEnabled,
-        activation: decodedToken.activation,
-      };
-      setUser(userData);
-      localStorage.setItem('token', data.token);
-    } else {
-      setError("Failed to process user data from token.");
-    }
-  }, []);
-
+      const processLoginResponse = useCallback((data: { token: string }) => {
+      const decodedToken = decodeJwt(data.token);
+      if (decodedToken) {
+        const userData: User = {
+          id: decodedToken.id,
+          username: decodedToken.username,
+          login: decodedToken.login,
+          role: decodedToken.roles && decodedToken.roles.length > 0 ? decodedToken.roles[0] : 'User', // Default to 'User'
+          token: data.token,
+          isTwoFactorEnabled: decodedToken.isTwoFactorEnabled,
+          activation: decodedToken.activation,
+        };
+        setUser(userData);
+        localStorage.setItem('token', data.token);
+      } else {
+        setError("Failed to process user data from token.");
+      }
+    }, []);
   const handleAuth = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);

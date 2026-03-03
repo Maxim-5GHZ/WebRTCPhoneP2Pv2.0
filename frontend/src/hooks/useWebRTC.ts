@@ -2,16 +2,29 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import type { IncomingCall, SignalMessage, User } from "../types/types";
 import { useSocket } from "../hooks/useSocket";
 
-async function getIceServers(useTurn: boolean): Promise<RTCConfiguration> {
+async function getIceServers(
+  useTurn: boolean,
+  token: string
+): Promise<RTCConfiguration> {
   try {
-    const response = await fetch(`/api/v1/webrtc/ice-servers?useTurn=${useTurn}`);
+    const response = await fetch(
+      `/api/v1/webrtc/ice-servers?useTurn=${useTurn}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
     if (!response.ok) {
       throw new Error(`Failed to fetch ICE servers: ${response.status}`);
     }
     const servers = await response.json();
     return { iceServers: servers };
   } catch (error) {
-    console.error("Could not get ICE servers, falling back to default STUN", error);
+    console.error(
+      "Could not get ICE servers, falling back to default STUN",
+      error
+    );
     // Fallback to a public STUN server if the backend is unavailable
     return {
       iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -20,7 +33,8 @@ async function getIceServers(useTurn: boolean): Promise<RTCConfiguration> {
 }
 
 export function useWebRTC(
-  setOnlineUsers: React.Dispatch<React.SetStateAction<User[]>>
+  setOnlineUsers: React.Dispatch<React.SetStateAction<User[]>>,
+  token: string
 ) {
   const { socket, sendSignal } = useSocket();
   const [myId, setMyId] = useState<string>("");
@@ -158,7 +172,7 @@ export function useWebRTC(
   }, [socket, setOnlineUsers, stopCall]);
   
   const createPC = async (remoteId: string, useTurn: boolean = false): Promise<RTCPeerConnection> => {
-    const config = await getIceServers(useTurn);
+    const config = await getIceServers(useTurn, token);
     const pc = new RTCPeerConnection(config);
 
     localStreamRef.current?.getTracks().forEach((track) => {

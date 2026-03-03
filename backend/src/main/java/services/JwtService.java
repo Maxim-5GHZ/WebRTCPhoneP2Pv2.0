@@ -38,13 +38,14 @@ public class JwtService {
         claims.put("id", user.getId());
         claims.put("roles", List.of(user.getRole().name()));
         claims.put("login", user.getLogin());
+        claims.put("username", user.getUsername());
         claims.put("isTwoFactorEnabled", user.isTwoFactorEnabled());
         claims.put("activation", user.getActivation().name());
 
 
         return Jwts.builder()
                 .setClaims(claims)
-                .setSubject(user.getUsername())
+                .setSubject(user.getLogin())
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_TIME))
                 .signWith(key)
@@ -71,6 +72,7 @@ public class JwtService {
             Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(token);
             return true;
         } catch (Exception e) {
+            e.printStackTrace();
             return false;
         }
     }

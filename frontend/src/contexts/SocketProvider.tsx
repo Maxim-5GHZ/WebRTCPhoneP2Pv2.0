@@ -1,8 +1,7 @@
 import {
   useEffect,
   useState,
-  useRef,
-  useCallback
+  useRef
 } from "react";
 import type { User } from "../types/types";
 import { SocketContext } from "./SocketContext";
@@ -19,8 +18,14 @@ export function SocketProvider({
   const [reconnectAttempt, setReconnectAttempt] = useState(0);
   const reconnectTimer = useRef<NodeJS.Timeout | null>(null);
 
-  const connect = useCallback(() => {
-    if (!user) return;
+  useEffect(() => {
+    if (!user?.token) {
+      if (socket && socket.readyState !== WebSocket.CLOSED) {
+        socket.close();
+      }
+      setSocket(null);
+      return;
+    }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
@@ -39,12 +44,10 @@ export function SocketProvider({
 
     ws.onclose = () => {
       setSocket(null);
-      if (!reconnectTimer.current) {
+      if (!reconnectTimer.current) { // Only try to reconnect if not already scheduled
         setIsReconnecting(true);
         reconnectTimer.current = setTimeout(() => {
           setReconnectAttempt(prev => prev + 1);
-          connect();
-          reconnectTimer.current = null;
         }, 1000 * Math.pow(2, Math.min(reconnectAttempt, 4))); // Exponential backoff, max 16 seconds
       }
     };
@@ -53,23 +56,17 @@ export function SocketProvider({
       ws.close();
     }
 
-    return ws;
-  }, [user, reconnectAttempt]);
-
-
-  useEffect(() => {
-    const ws = connect();
-
     return () => {
       if (reconnectTimer.current) {
         clearTimeout(reconnectTimer.current);
+        reconnectTimer.current = null;
       }
-      if (ws) {
-        ws.onclose = null; // Prevent reconnection on unmount
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+        ws.onclose = null; // Prevent onclose from triggering reconnect on *this* cleanup
         ws.close();
       }
     };
-  }, [connect]);
+  }, [user?.token, reconnectAttempt]); // Depend only on the token and reconnect attempt
 
   const sendSignal = (message: object) => {
     if (socket?.readyState === WebSocket.OPEN) {
