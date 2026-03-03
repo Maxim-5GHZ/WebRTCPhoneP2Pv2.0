@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "kurento-utils": "^7.3.0"
+  }
+}

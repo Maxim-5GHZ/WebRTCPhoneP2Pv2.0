@@ -28,6 +28,7 @@ services:
       - MARIADB_USER=${MARIADB_USER}
       - MARIADB_PASSWORD=${MARIADB_PASSWORD}
       - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - KURENTO_URL=ws://kurento:8888/kurento
     depends_on:
       - mariadb
       - coturn

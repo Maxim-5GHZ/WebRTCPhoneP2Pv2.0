@@ -25,6 +25,9 @@ export function Header({ user, onLogout, onToggle2FA }: HeaderProps) {
         </small>
       </div>
       <div>
+        <Link to="/conference" style={styles.buttonSecondary}>
+          Conference
+        </Link>
         {user.role === 'Admin' && (
           <Link to="/admin" style={styles.buttonSecondary}>
             Admin Panel

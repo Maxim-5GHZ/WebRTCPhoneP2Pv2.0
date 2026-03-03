@@ -1,15 +1,24 @@
 package controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import models.User;
+import org.kurento.client.IceCandidate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import repositories.UserRepository;
+import services.webrtc.Room;
+import services.webrtc.RoomManager;
+import services.webrtc.UserRegistry;
+import services.webrtc.UserSession;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -32,9 +41,17 @@ public class SocketHandler extends TextWebSocketHandler {
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
 
+    @Autowired
+    private RoomManager roomManager;
+
+    @Autowired
+    private UserRegistry registry;
+    private static final Gson gson = new GsonBuilder().create();
+
 
     /**
      * Конструктор для внедрения зависимостей. @param objectMapper-объект для сопоставления JSON.
+     *
      * @param userRepository
      */
     public SocketHandler(ObjectMapper objectMapper,
@@ -45,6 +62,7 @@ public class SocketHandler extends TextWebSocketHandler {
 
     /**
      * Вызывается после успешного установления соединения WebSocket.
+     *
      * @param session Установленный сеанс.
      */
     @Override
@@ -83,11 +101,12 @@ public class SocketHandler extends TextWebSocketHandler {
 
     /**
      * Вызывается после закрытия соединения WebSocket.
+     *
      * @param session Закрытый сеанс.
-     * @param status Статус закрытия.
+     * @param status  Статус закрытия.
      */
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws IOException {
         Long userId = getUserId(session);
         if (userId != null) {
             synchronized (callLock) {
@@ -114,7 +133,13 @@ public class SocketHandler extends TextWebSocketHandler {
             // Уведомляем всех остальных пользователей об отключении
             broadcast(Map.of("type", "user-disconnected", "userId", userId));
         }
+        UserSession user = registry.removeBySession(session);
+        if (user != null) {
+            Room room = roomManager.getRoom(user.getRoomName());
+            room.leave(user);
+        }
     }
+
     private void broadcast(Map<String, Object> message) {
         String jsonMessage;
         try {
@@ -136,54 +161,95 @@ public class SocketHandler extends TextWebSocketHandler {
             }
         });
     }
+
     /**
      * Обрабатывает входящие текстовые сообщения WebSocket.
+     *
      * @param session Сеанс, отправивший сообщение.
      * @param message Полученное сообщение.
      */
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) {
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         Long fromUserId = getUserId(session);
         if (fromUserId == null) return;
+
+        JsonObject jsonMessage = gson.fromJson(message.getPayload(), JsonObject.class);
+        final UserSession user = registry.getBySession(session);
+        if (user != null) {
+            logger.debug("Incoming message from user '{}': {}", user.getName(), jsonMessage);
+        } else {
+            logger.debug("Incoming message from new user: {}", jsonMessage);
+        }
+
 
         try {
             Map<String, Object> payload = objectMapper.readValue(message.getPayload(), HashMap.class);
             String type = (String) payload.get("type");
 
-            Long toUserId = getToUserId(payload.get("to"));
+            if (type != null) {
+                Long toUserId = getToUserId(payload.get("to"));
 
-            if (toUserId == null) {
-                logger.warn("Recipient user ID ('to') is missing or invalid in payload: {}", payload);
-                return; // Или отправить ошибку отправителю
-            }
+                if (toUserId == null) {
+                    logger.warn("Recipient user ID ('to') is missing or invalid in payload: {}", payload);
+                    return; // Или отправить ошибку отправителю
+                }
 
 
-            WebSocketSession recipient = sessions.get(toUserId);
-            if (recipient == null || !recipient.isOpen()) {
-                logger.warn("Recipient User ID {} not found or session is closed", toUserId);
-                // Можно отправить сообщение об ошибке отправителю
-                sendMessage(session, Map.of("type", "error", "message", "User " + toUserId + " is not online."));
-                return;
-            }
+                WebSocketSession recipient = sessions.get(toUserId);
+                if (recipient == null || !recipient.isOpen()) {
+                    logger.warn("Recipient User ID {} not found or session is closed", toUserId);
+                    // Можно отправить сообщение об ошибке отправителю
+                    sendMessage(session, Map.of("type", "error", "message", "User " + toUserId + " is not online."));
+                    return;
+                }
 
-            switch (type) {
-                case "call-user":
-                    handleCallUser(session, fromUserId, toUserId, payload,recipient);
-                    break;
-                case "make-answer":
-                    handleMakeAnswer(fromUserId, toUserId, payload, recipient);
-                    break;
-                case "ice-candidate":
-                    handleIceCandidate(fromUserId, toUserId, payload, recipient);
-                    break;
-                case "hang-up":
-                    handleHangUp(fromUserId, toUserId, recipient);
-                    break;
-                case "request-turn-renegotiation":
-                    sendMessage(recipient, Map.of("type", "request-turn-renegotiation", "from", fromUserId));
-                    break;
-                default:
-                    logger.warn("Unknown message type: {}", type);
+                switch (type) {
+                    case "call-user":
+                        handleCallUser(session, fromUserId, toUserId, payload, recipient);
+                        break;
+                    case "make-answer":
+                        handleMakeAnswer(fromUserId, toUserId, payload, recipient);
+                        break;
+                    case "ice-candidate":
+                        handleIceCandidate(fromUserId, toUserId, payload, recipient);
+                        break;
+                    case "hang-up":
+                        handleHangUp(fromUserId, toUserId, recipient);
+                        break;
+                    case "request-turn-renegotiation":
+                        sendMessage(recipient, Map.of("type", "request-turn-renegotiation", "from", fromUserId));
+                        break;
+                    default:
+                        logger.warn("Unknown message type: {}", type);
+                }
+            } else {
+                switch (jsonMessage.get("id").getAsString()) {
+                    case "joinRoom":
+                        joinRoom(jsonMessage, session);
+                        break;
+                    case "receiveVideoFrom":
+                        final String senderName = jsonMessage.get("sender").getAsString();
+                        final UserSession sender = registry.getBySession(session);
+                        final String sdpOffer = jsonMessage.get("sdpOffer").getAsString();
+                        if (sender != null) {
+                            user.receiveVideoFrom(sender, sdpOffer);
+                        }
+                        break;
+                    case "leaveRoom":
+                        leaveRoom(user);
+                        break;
+                    case "onIceCandidate":
+                        JsonObject candidate = jsonMessage.get("candidate").getAsJsonObject();
+
+                        if (user != null) {
+                            IceCandidate cand = new IceCandidate(candidate.get("candidate").getAsString(),
+                                    candidate.get("sdpMid").getAsString(), candidate.get("sdpMLineIndex").getAsInt());
+                            user.addCandidate(cand, jsonMessage.get("name").getAsString());
+                        }
+                        break;
+                    default:
+                        break;
+                }
             }
         } catch (IOException e) {
             logger.error("IO error handling message from user {}: {}", fromUserId, e.getMessage());
@@ -191,6 +257,26 @@ public class SocketHandler extends TextWebSocketHandler {
             logger.error("Unexpected error handling message from user {}: {}", fromUserId, e.getMessage(), e);
         }
     }
+
+    private void joinRoom(JsonObject params, WebSocketSession session) throws IOException {
+        final String roomName = params.get("room").getAsString();
+        final String name = params.get("name").getAsString();
+        logger.info("PARTICIPANT {}: trying to join room {}", name, roomName);
+
+        Room room = roomManager.getRoom(roomName);
+        final UserSession user = room.join(name, session);
+        registry.register(user);
+    }
+
+    private void leaveRoom(UserSession user) throws IOException {
+        final Room room = roomManager.getRoom(user.getRoomName());
+        room.leave(user);
+        if (room.getParticipants().isEmpty()) {
+            roomManager.removeRoom(room);
+        }
+    }
+
+
     private void handleCallUser(WebSocketSession fromSession, Long fromUserId, Long toUserId, Map<String, Object> payload, WebSocketSession recipient) {
         synchronized (callLock) {
             if (userInCallStatus.getOrDefault(toUserId, false)) {
@@ -225,7 +311,7 @@ public class SocketHandler extends TextWebSocketHandler {
     }
 
     private void handleMakeAnswer(Long fromUserId, Long toUserId, Map<String, Object> payload, WebSocketSession recipient) {
-        if(!userPeers.containsKey(fromUserId) || !userPeers.get(fromUserId).equals(toUserId)){
+        if (!userPeers.containsKey(fromUserId) || !userPeers.get(fromUserId).equals(toUserId)) {
             logger.warn("User {} is not in a call with user {}", fromUserId, toUserId);
             return;
         }
@@ -243,7 +329,7 @@ public class SocketHandler extends TextWebSocketHandler {
     }
 
     private void handleIceCandidate(Long fromUserId, Long toUserId, Map<String, Object> payload, WebSocketSession recipient) {
-        if(!userPeers.containsKey(fromUserId) || !userPeers.get(fromUserId).equals(toUserId)){
+        if (!userPeers.containsKey(fromUserId) || !userPeers.get(fromUserId).equals(toUserId)) {
             logger.warn("User {} is not in a call with user {}", fromUserId, toUserId);
             return;
         }
@@ -251,6 +337,7 @@ public class SocketHandler extends TextWebSocketHandler {
         Object candidate = payload.get("candidate");
         sendMessage(recipient, Map.of("type", "ice-candidate", "candidate", candidate, "from", fromUserId));
     }
+
     private void handleHangUp(Long fromUserId, Long toUserId, WebSocketSession recipient) {
         synchronized (callLock) {
             // Сбрасываем статус "в звонке" для обоих пользователей
@@ -283,8 +370,10 @@ public class SocketHandler extends TextWebSocketHandler {
         }
         return null;
     }
+
     /**
      * Отправляет сообщение JSON указанному сеансу.
+     *
      * @param session Сеанс для отправки сообщения.
      * @param payload Данные для отправки.
      */
@@ -309,6 +398,7 @@ public class SocketHandler extends TextWebSocketHandler {
     public java.util.Set<Long> getOnlineUserIds() {
         return sessions.keySet();
     }
+
     public boolean isUserInCall(Long userId) {
         return userInCallStatus.getOrDefault(userId, false);
     }

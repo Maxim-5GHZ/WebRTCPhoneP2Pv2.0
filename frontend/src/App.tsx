@@ -6,6 +6,7 @@ import { useAuthContext } from './hooks/useAuth';
 import TwoFactorAuthPage from "./pages/TwoFactorAuthPage.tsx";
 import AdminPage from "./pages/AdminPage.tsx";
 import AdminRoute from './routes/AdminRoute.tsx';
+import ConferencePage from "./pages/ConferencePage.tsx";
 
 function App() {
   const { user, MfaRequired, loading } = useAuthContext();
@@ -24,6 +25,7 @@ function App() {
         
         {/* Protected Routes */}
         <Route path="/" element={user ? <HomePage /> : <Navigate to="/login" />} />
+        <Route path="/conference" element={user ? <ConferencePage /> : <Navigate to="/login" />} />
 
         {/* Admin Route */}
         <Route element={<AdminRoute />}>
