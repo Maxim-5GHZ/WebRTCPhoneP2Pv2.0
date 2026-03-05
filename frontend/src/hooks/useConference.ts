@@ -1,19 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSocket } from './useSocket';
+import { WebRtcPeer } from 'kurento-utils';
 import { useAuthContext } from "./useAuth.ts";
-import * as kurentoUtils from 'kurento-utils';
-import {
-    ConferenceMessage,
-    ExistingParticipantsMessage, IceCandidateMessage,
-    NewParticipantMessage,
-    ParticipantLeftMessage, ReceiveVideoAnswerMessage
-} from "../types/types.ts";
 
 interface Participant {
     id: string;
     name: string;
     stream?: MediaStream;
-    rtcPeer?: any;
+    rtcPeer?: WebRtcPeer;
 }
 
 export const useConference = (roomName: string) => {
@@ -34,11 +28,11 @@ export const useConference = (roomName: string) => {
             socket.send(JSON.stringify(message));
         };
 
-        const onNewParticipant = (request: NewParticipantMessage) => {
+        const onNewParticipant = (request: any) => {
             receiveVideo(request.name);
         };
         
-        const onExistingParticipants = (message: ExistingParticipantsMessage) => {
+        const onExistingParticipants = (message: any) => {
             const newParticipants: Record<string, Participant> = {};
             for (const participant of message.data) {
                 newParticipants[participant] = { id: participant, name: participant };
@@ -51,8 +45,8 @@ export const useConference = (roomName: string) => {
             const participant = { id: sender, name: sender };
             const options = {
                 remoteVideo: undefined, // Will be handled dynamically
-                onicecandidate: (candidate: RTCIceCandidate) => onIceCandidate(sender, candidate),
-                onaddstream: (event: { stream: MediaStream }) => {
+                onicecandidate: (candidate: any) => onIceCandidate(sender, candidate),
+                onaddstream: (event: any) => {
                     setParticipants(prev => ({
                         ...prev,
                         [sender]: {
@@ -63,25 +57,23 @@ export const useConference = (roomName: string) => {
                 }
             }
             
-            const newRtcPeer = new kurentoUtils.WebRtcPeer.WebRtcPeerRecvonly(options, function(error) {
+            const newRtcPeer = new WebRtcPeer.WebRtcPeerRecvonly(options, function(error) {
                 if(error) return console.error(error);
-                if ('generateOffer' in this && typeof this.generateOffer === 'function') {
-                    this.generateOffer((error: string, offerSdp: string) => {
-                        if (error) return console.error(error);
-                        const message = {
-                            id: 'receiveVideoFrom',
-                            sender: sender,
-                            sdpOffer: offerSdp
-                        };
-                        socket.send(JSON.stringify(message));
-                    });
-                }
+                this.generateOffer((error: any, offerSdp: any) => {
+                    if(error) return console.error(error);
+                    const message = {
+                        id: 'receiveVideoFrom',
+                        sender: sender,
+                        sdpOffer: offerSdp
+                    };
+                    socket.send(JSON.stringify(message));
+                });
             });
 
             setParticipants(prev => ({...prev, [sender]: { ...participant, rtcPeer: newRtcPeer }}));
         };
 
-        const onIceCandidate = (sender: string, candidate: RTCIceCandidate) => {
+        const onIceCandidate = (sender: string, candidate: any) => {
             const message = {
                 id: 'onIceCandidate',
                 name: sender,
@@ -90,7 +82,7 @@ export const useConference = (roomName: string) => {
             socket.send(JSON.stringify(message));
         };
 
-        const onParticipantLeft = (message: ParticipantLeftMessage) => {
+        const onParticipantLeft = (message: any) => {
             const participant = participants[message.name];
             if (participant) {
                 participant.rtcPeer?.dispose();
@@ -102,13 +94,13 @@ export const useConference = (roomName: string) => {
             }
         };
         
-        const onReceiveVideoAnswer = (message: ReceiveVideoAnswerMessage) => {
+        const onReceiveVideoAnswer = (message: any) => {
             participants[message.name]?.rtcPeer?.processAnswer(message.sdpAnswer, function (error) {
                 if (error) return console.error(error);
             });
         }
         
-        const iceCandidate = (message: IceCandidateMessage) => {
+        const iceCandidate = (message: any) => {
             participants[message.name]?.rtcPeer?.addIceCandidate(message.candidate, function(error) {
                 if (error) {
                     console.error("Error adding candidate: " + error);
@@ -119,24 +111,24 @@ export const useConference = (roomName: string) => {
 
 
         const messageListener = (event: MessageEvent) => {
-            const parsedMessage: ConferenceMessage = JSON.parse(event.data);
+            const parsedMessage = JSON.parse(event.data);
             console.log('Received message: ', parsedMessage);
 
             switch (parsedMessage.id) {
                 case 'existingParticipants':
-                    onExistingParticipants(parsedMessage as ExistingParticipantsMessage);
+                    onExistingParticipants(parsedMessage);
                     break;
                 case 'newParticipantArrived':
-                    onNewParticipant(parsedMessage as NewParticipantMessage);
+                    onNewParticipant(parsedMessage);
                     break;
                 case 'participantLeft':
-                    onParticipantLeft(parsedMessage as ParticipantLeftMessage);
+                    onParticipantLeft(parsedMessage);
                     break;
                 case 'receiveVideoAnswer':
-                    onReceiveVideoAnswer(parsedMessage as ReceiveVideoAnswerMessage);
+                    onReceiveVideoAnswer(parsedMessage);
                     break;
                 case 'iceCandidate':
-                    iceCandidate(parsedMessage as IceCandidateMessage);
+                    iceCandidate(parsedMessage);
                     break;
                 default:
                     console.error('Unrecognized message', parsedMessage);
@@ -156,7 +148,7 @@ export const useConference = (roomName: string) => {
 
             Object.values(participants).forEach(p => p.rtcPeer?.dispose());
         };
-    }, [socket, user, roomName, myName, participants]);
+    }, [socket, user, roomName, myName]);
 
     return { participants };
 };

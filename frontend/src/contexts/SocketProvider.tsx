@@ -23,11 +23,7 @@ export function SocketProvider({
       if (socket && socket.readyState !== WebSocket.CLOSED) {
         socket.close();
       }
-    }
-  }, [user?.token, socket]);
-
-  useEffect(() => {
-    if (!user?.token) {
+      setSocket(null);
       return;
     }
 
