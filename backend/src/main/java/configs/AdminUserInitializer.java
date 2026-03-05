@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import repositories.UserRepository;
 
@@ -15,12 +16,17 @@ public class AdminUserInitializer implements CommandLineRunner {
     private static final Logger logger = LoggerFactory.getLogger(AdminUserInitializer.class);
 
     private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
 
     @Value("${app.admin.initial-login}")
     private String adminLogin;
 
-    public AdminUserInitializer(UserRepository userRepository) {
+    @Value("${app.admin.initial-password}")
+    private String adminPassword;
+
+    public AdminUserInitializer(UserRepository userRepository, PasswordEncoder passwordEncoder) {
         this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -40,7 +46,15 @@ public class AdminUserInitializer implements CommandLineRunner {
                     logger.info("User '{}' already has ADMIN role.", user.getLogin());
                 }
             },
-            () -> logger.warn("Initial admin user with login '{}' not found in the database. Please create the user first.", adminLogin)
+            () -> {
+                if (adminPassword == null || adminPassword.isEmpty()) {
+                    logger.warn("Initial admin password not specified in properties (app.admin.initial-password). Cannot create admin user.");
+                    return;
+                }
+                User adminUser = new User("admin", adminLogin, passwordEncoder.encode(adminPassword), UserRole.Admin);
+                userRepository.save(adminUser);
+                logger.info("Created initial admin user with login '{}'", adminLogin);
+            }
         );
     }
 }
