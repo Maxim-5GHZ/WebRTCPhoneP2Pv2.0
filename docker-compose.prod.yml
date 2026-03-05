@@ -1,6 +1,15 @@
 version: '3.8'
 
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: frontend_prod_server
+    restart: unless-stopped
+    networks:
+      - app-network
+
   nginx:
     image: your-registry/webrtc-nginx:latest # <-- Замените на ваш образ Nginx
     container_name: nginx_server
@@ -27,35 +36,6 @@ services:
       - MARIADB_DATABASE=${MARIADB_DATABASE}
       - MARIADB_USER=${MARIADB_USER}
       - MARIADB_PASSWORD=${MARIADB_PASSWORD}
-      - KURENTO_URL=ws://kurento:8888/kurento
-    depends_on:
-      mariadb:
-        condition: service_healthy
-      coturn:
-        condition: service_started
-      kurento:
-        condition: service_started
-    networks:
-      - app-network
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
-    container_name: frontend_prod_server
-    restart: unless-stopped
-    networks:
-      - app-network
-    depends_on:
-      backend:
-        condition: service_started
-
-  kurento:
-    image: kurento/kurento-media-server:latest
-    container_name: kurento_media_server
-    restart: unless-stopped
-    ports:
-      - "8888:8888"
     networks:
       - app-network
 
@@ -70,38 +50,6 @@ services:
       - MARIADB_PASSWORD=${MARIADB_PASSWORD}
     volumes:
       - mariadb_data:/var/lib/mysql
-    networks:
-      - app-network
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "mariadb-admin",
-          "ping",
-          "-h",
-          "127.0.0.1",
-          "-u",
-          "${MARIADB_USER}",
-          "-p${MARIADB_PASSWORD}",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  coturn:
-    image: coturn/coturn
-    container_name: coturn_server
-    restart: unless-stopped
-    env_file:
-      - .env
-    command: turnserver -c /etc/coturn/turnserver.conf -v
-    ports:
-      - "3478:3478/tcp"
-      - "3478:3478/udp"
-      - "49152-49351:49152-49351/udp" # Add this range for media relay
-    volumes:
-      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
-      - ./nginx-docker/ssl:/etc/nginx/ssl
     networks:
       - app-network
 

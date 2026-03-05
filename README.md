@@ -27,7 +27,7 @@
 
 ### Переменные окружения (`.env`)
 
-Создайте файл `.env` в корневой директории проекта, скопировав `.env.example`. Он будет использоваться для всех сред (development и production).
+Создайте файл `.env` в корневой директории проекта. Он будет использоваться для всех сред (development и production).
 
 ```env
 # Пароли для базы данных MariaDB
@@ -44,21 +44,12 @@ MAIL_PASSWORD=your_mail_password
 # Вы можете установить его вручную или использовать скрипт для генерации.
 TURN_PASSWORD=your_super_secret_turn_password
 
-# The local IP address of the machine running Docker
-HOST_IP=192.168.1.50
-
-# Admin user settings
-app.admin.initial-password=admin
-
-# Frontend settings
-VITE_HMR_HOST=${HOST_IP}
-VITE_API_URL=https://${HOST_IP}/api
-VITE_SIGNAL_URL=wss://${HOST_IP}/signal
+# Конфигурация CORS
+# Укажите разрешенные источники (origins) для CORS-запросов.
+# В режиме разработки можно использовать "*", но для production рекомендуется указать конкретные домены.
+# Например: http://localhost:5173,https://your-domain.com
+APP_CORS_ALLOWED_ORIGINS=*
 ```
-
-**Важно:**
-- `app.admin.initial-login` находится в `backend/src/main/resources/application.properties` и по умолчанию `admin`.
-- `app.admin.initial-password` используется для создания администратора при первом запуске.
 
 ### Ротация пароля TURN-сервера
 
@@ -74,7 +65,7 @@ bash ./rotate_turn_password.sh
 
 ## 2. Запуск проекта
 
-Проект использует разные файлы `docker-compose` для разделения сред разработки и production. `docker-compose.yml` является базовым и используется в обоих случаях.
+Проект использует разные файлы `docker-compose` для разделения сред разработки и production.
 
 ### Production-окружение
 
@@ -82,13 +73,13 @@ bash ./rotate_turn_password.sh
 
 **Команда для запуска:**
 ```bash
-docker-compose -f docker-compose.prod.yml up --build -d
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 ```
 После запуска приложение будет доступно по адресу вашего сервера (например, `https://your_domain.com`).
 
 **Для остановки:**
 ```bash
-docker-compose -f docker-compose.prod.yml down
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
 ```
 
 ### Среда для разработки (Development)
@@ -97,7 +88,7 @@ docker-compose -f docker-compose.prod.yml down
 
 **Команда для запуска:**
 ```bash
-docker-compose -f docker-compose.dev.yml up --build -d
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
 ```
 После запуска сервисы будут доступны по следующим адресам:
 -   **Фронтенд:** `http://localhost:5173`
@@ -106,7 +97,7 @@ docker-compose -f docker-compose.dev.yml up --build -d
 
 **Для остановки:**
 ```bash
-docker-compose -f docker-compose.dev.yml down
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
 ---

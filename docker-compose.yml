@@ -12,8 +12,7 @@ services:
       - ./nginx-docker/conf.d:/etc/nginx/conf.d:ro
       - ./nginx-docker/ssl:/etc/nginx/ssl:ro
     depends_on:
-      backend:
-        condition: service_started
+      - backend
     networks:
       - app-network
 
@@ -31,12 +30,9 @@ services:
       - MAIL_PASSWORD=${MAIL_PASSWORD}
       - KURENTO_URL=ws://kurento:8888/kurento
     depends_on:
-      mariadb:
-        condition: service_healthy
-      coturn:
-        condition: service_started
-      kurento:
-        condition: service_started
+      - mariadb
+      - coturn
+      - kurento
     networks:
       - app-network
 
@@ -66,21 +62,6 @@ services:
       - mariadb_data:/var/lib/mysql
     networks:
       - app-network
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "mariadb-admin",
-          "ping",
-          "-h",
-          "127.0.0.1",
-          "-u",
-          "${MARIADB_USER}",
-          "-p${MARIADB_PASSWORD}",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   coturn:
     image: coturn/coturn
