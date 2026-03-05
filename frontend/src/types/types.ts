@@ -1,5 +1,5 @@
 export interface User {
-  id: any;
+  id: number;
   username: string;
   token: string;
   role: string;
@@ -29,7 +29,7 @@ export interface SignalMessage {
     | "make-answer"
     | "request-turn-renegotiation";
     myId?: string;
-    data?: any;
+    data?: unknown;
     userId?: string;
     username?: string;
     inCall?: boolean;
@@ -41,3 +41,32 @@ export interface SignalMessage {
     to?: string;
     useTurn?: boolean;
 }
+
+export interface NewParticipantMessage {
+    id: 'newParticipantArrived';
+    name: string;
+}
+
+export interface ExistingParticipantsMessage {
+    id: 'existingParticipants';
+    data: string[];
+}
+
+export interface ParticipantLeftMessage {
+    id: 'participantLeft';
+    name: string;
+}
+
+export interface ReceiveVideoAnswerMessage {
+    id: 'receiveVideoAnswer';
+    name: string;
+    sdpAnswer: string;
+}
+
+export interface IceCandidateMessage {
+    id: 'iceCandidate';
+    name: string;
+    candidate: RTCIceCandidate;
+}
+
+export type ConferenceMessage = NewParticipantMessage | ExistingParticipantsMessage | ParticipantLeftMessage | ReceiveVideoAnswerMessage | IceCandidateMessage;
