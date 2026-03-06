@@ -13,9 +13,11 @@ interface CallControlsProps {
   onHangUp: () => void;
   onToggleAudio: () => void;
   onToggleVideo: () => void;
+  onToggleScreenSharing: () => void;
   onRenegotiate: () => void;
   isAudioMuted: boolean;
   isVideoEnabled: boolean;
+  isScreenSharing: boolean;
 }
 
 export function CallControls({
@@ -30,9 +32,11 @@ export function CallControls({
   onHangUp,
   onToggleAudio,
   onToggleVideo,
+  onToggleScreenSharing,
   onRenegotiate,
   isAudioMuted,
   isVideoEnabled,
+  isScreenSharing,
 }: CallControlsProps) {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
 
@@ -95,6 +99,14 @@ export function CallControls({
             }
           >
             {!isVideoEnabled ? "Включить видео" : "Выключить видео"}
+          </button>
+          <button
+            onClick={onToggleScreenSharing}
+            style={
+              isScreenSharing ? styles.buttonWarning : styles.buttonPrimary
+            }
+          >
+            {isScreenSharing ? "Остановить демонстрацию" : "Демонстрация экрана"}
           </button>
           <button onClick={onHangUp} style={styles.buttonDanger}>
             Завершить звонок

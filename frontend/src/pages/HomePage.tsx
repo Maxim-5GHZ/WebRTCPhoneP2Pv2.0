@@ -20,6 +20,7 @@ function HomePageContent() {
         incomingCall,
         isAudioMuted,
         isVideoEnabled,
+        isScreenSharing,
         localStream,
         remoteStream,
         isRemoteMuted,
@@ -30,6 +31,7 @@ function HomePageContent() {
         stopCall,
         toggleAudio,
         toggleVideo,
+        toggleScreenSharing,
         handleRenegotiate,
     } = useWebRTC(setOnlineUsers, user?.token || "");
 
@@ -81,6 +83,7 @@ function HomePageContent() {
                 status={status}
                 isAudioMuted={isAudioMuted}
                 isVideoEnabled={isVideoEnabled}
+                isScreenSharing={isScreenSharing}
                 incomingCall={incomingCall}
                 renegotiationRequired={renegotiationRequired}
                 onAccept={handleAccept}
@@ -88,6 +91,7 @@ function HomePageContent() {
                 onHangUp={stopCall}
                 onToggleAudio={toggleAudio}
                 onToggleVideo={toggleVideo}
+                onToggleScreenSharing={toggleScreenSharing}
                 onRenegotiate={handleRenegotiate}
                 myId={myId}
                 onlineUsers={onlineUsers}

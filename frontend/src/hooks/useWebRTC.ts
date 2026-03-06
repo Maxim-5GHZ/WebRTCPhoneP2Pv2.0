@@ -44,6 +44,7 @@ export function useWebRTC(
   const [incomingCall, setIncomingCall] = useState<IncomingCall | null>(null);
   const [isAudioMuted, setIsAudioMuted] = useState<boolean>(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState<boolean>(true);
+  const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
   const [renegotiationRequired, setRenegotiationRequired] = useState<boolean>(false);
 
 
@@ -53,6 +54,7 @@ export function useWebRTC(
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const localVideoTrackRef = useRef<MediaStreamTrack | null>(null);
   const remoteUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
@@ -64,6 +66,7 @@ export function useWebRTC(
         });
         setLocalStream(stream);
         localStreamRef.current = stream;
+        localVideoTrackRef.current = stream.getVideoTracks()[0];
       } catch (err) {
         console.error("Error accessing media devices:", err);
         alert("Не удалось получить доступ к камере/микрофону");
@@ -279,12 +282,57 @@ export function useWebRTC(
     }
   };
 
+  const toggleScreenSharing = async () => {
+    if (!isScreenSharing) {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+        });
+        const screenTrack = screenStream.getVideoTracks()[0];
+
+        if (pcRef.current && localStreamRef.current) {
+          const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video');
+          if (sender) {
+            await sender.replaceTrack(screenTrack);
+          }
+          const oldTrack = localStreamRef.current.getVideoTracks()[0];
+          localStreamRef.current.removeTrack(oldTrack);
+          localStreamRef.current.addTrack(screenTrack);
+          setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+        }
+        
+        setIsScreenSharing(true);
+        setIsVideoEnabled(true);
+
+        screenTrack.onended = () => {
+          toggleScreenSharing();
+        };
+
+      } catch (err) {
+        console.error("Error sharing screen:", err);
+      }
+    } else {
+      if (pcRef.current && localStreamRef.current && localVideoTrackRef.current) {
+        const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) {
+          await sender.replaceTrack(localVideoTrackRef.current);
+        }
+        const oldTrack = localStreamRef.current.getVideoTracks()[0];
+        localStreamRef.current.removeTrack(oldTrack);
+        localStreamRef.current.addTrack(localVideoTrackRef.current);
+        setLocalStream(new MediaStream(localStreamRef.current.getTracks()));
+      }
+      setIsScreenSharing(false);
+    }
+  };
+
   return {
     myId,
     status,
     incomingCall,
     isAudioMuted,
     isVideoEnabled,
+    isScreenSharing,
     localStream,
     remoteStream,
     isRemoteMuted,
@@ -295,6 +343,7 @@ export function useWebRTC(
     stopCall,
     toggleAudio,
     toggleVideo,
+    toggleScreenSharing,
     handleRenegotiate,
   };
 }
