@@ -1,0 +1,107 @@
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: nginx-docker/Dockerfile.dev
+    container_name: nginx_dev_server
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx-docker/conf.d/dev.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx-docker/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - frontend
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend_dev_server
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - MARIADB_HOST=mariadb
+      - MARIADB_DATABASE=${MARIADB_DATABASE}
+      - MARIADB_USER=${MARIADB_USER}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+      - MAIL_PASSWORD=${MAIL_PASSWORD}
+      - KURENTO_URL=ws://kurento:8888/kurento
+    volumes:
+      - ./backend/src:/app/src
+    depends_on:
+      - mariadb
+      - coturn
+      - kurento
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile.dev
+    container_name: frontend_dev_server
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - app-network
+    depends_on:
+      - backend
+
+  kurento:
+    image: kurento/kurento-media-server:latest
+    container_name: kurento_media_server
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    networks:
+      - app-network
+  
+  mariadb:
+    image: mariadb:10.9
+    container_name: mariadb_server
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    env_file:
+      - .env
+    environment:
+      - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
+      - MARIADB_DATABASE=${MARIADB_DATABASE}
+      - MARIADB_USER=${MARIADB_USER}
+      - MARIADB_PASSWORD=${MARIADB_PASSWORD}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    networks:
+      - app-network
+
+  coturn:
+    image: coturn/coturn
+    container_name: coturn_server
+    restart: unless-stopped
+    env_file:
+      - .env
+    command: turnserver -c /etc/coturn/turnserver.conf -v
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49152-49351:49152-49351/udp" # Add this range for media relay
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+      - ./nginx-docker/ssl:/etc/nginx/ssl
+    networks:
+      - app-network
+
+volumes:
+  mariadb_data:
+
+networks:
+  app-network:
+    driver: bridge

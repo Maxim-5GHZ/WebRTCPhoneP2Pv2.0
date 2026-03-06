@@ -3,14 +3,20 @@ package controllers;
 
 import jakarta.validation.Valid;
 import models.*;
-import org.springframework.security.core.context.SecurityContextHolder;
-import repositories.UserRepository;
-import services.JwtService;
-import services.UserRegistration;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import repositories.UserRepository;
+import services.EmailService;
+import services.JwtService;
+import services.TwoFactorAuthenticationService;
+import services.UserRegistration;
+
 import java.util.List;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 
@@ -21,26 +27,36 @@ public class AuthController {
     private final UserRegistration userRegistration;
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    private final JwtService jwtService; // Добавили сервис
+    private final JwtService jwtService;
     private final SocketHandler socketHandler;
+    private final TwoFactorAuthenticationService twoFactorAuthenticationService;
+    private final EmailService emailService;
 
     public AuthController(UserRegistration userRegistration,
                           UserRepository userRepository,
                           PasswordEncoder passwordEncoder,
-                          JwtService jwtService, SocketHandler socketHandler) {
+                          JwtService jwtService,
+                          SocketHandler socketHandler,
+                          TwoFactorAuthenticationService twoFactorAuthenticationService,
+                          EmailService emailService) {
         this.userRegistration = userRegistration;
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.socketHandler = socketHandler;
+        this.twoFactorAuthenticationService = twoFactorAuthenticationService;
+        this.emailService = emailService;
     }
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@Valid @RequestBody RegisterRequest request) {
+        if (userRepository.findByLogin(request.getLogin()).isPresent()) {
+            return ResponseEntity.badRequest().body("User with this login already exists");
+        }
         try {
             User user = userRegistration.registerNewUser(request.getUsername(), request.getLogin(), request.getPassword());
-            String token = jwtService.generateToken(user.getLogin());
-            return ResponseEntity.ok(new UserResponse(user.getId(), user.getUsername(), user.getLogin(), user.getRole().toString(), token));
+            String token = jwtService.generateToken(user);
+            return ResponseEntity.ok(new UserResponse(user.getId(), user.getUsername(), user.getLogin(), user.getRole().toString(), token, user.isTwoFactorEnabled()));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
@@ -48,14 +64,41 @@ public class AuthController {
 
     @PostMapping("/login")
     public ResponseEntity<?> login(@Valid @RequestBody LoginRequest request) {
-        return userRepository.findByLogin(request.getLogin())
-                .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()))
-                .map(user -> {
-                    String token = jwtService.generateToken(user.getLogin());
-                    return ResponseEntity.ok(new UserResponse(user.getId(), user.getUsername(), user.getLogin(), user.getRole().toString(), token));
-                })
-                .orElse(ResponseEntity.status(401).build());
+        Optional<User> userOptional = userRepository.findByLogin(request.getLogin())
+                .filter(user -> passwordEncoder.matches(request.getPassword(), user.getPassword()));
+
+        if (userOptional.isPresent()) {
+            try {
+                User user = userOptional.get();
+                if (user.isTwoFactorEnabled() != null && user.isTwoFactorEnabled()) {
+                    String code = twoFactorAuthenticationService.generateTwoFactorCode(user);
+                    emailService.sendTwoFactorCode(user.getLogin(), code);
+                    return ResponseEntity.ok(new LoginResponse("2FA_REQUIRED", null, user.getLogin(), user.getUsername(), user.getRole().toString(), true));
+                }
+                String token = jwtService.generateToken(user);
+                return ResponseEntity.ok(new LoginResponse("Authentication successful", token, user.getLogin(), user.getUsername(), user.getRole().toString(), Optional.ofNullable(user.isTwoFactorEnabled()).orElse(false)));
+            } catch (Exception e) {
+                // Log the exception for debugging purposes
+                // logger.error("Error during login for user: {}", request.getLogin(), e);
+                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Error during token generation: " + e.getMessage());
+            }
+        } else {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Неправильный пароль");
+        }
     }
+
+    @PostMapping("/verify-2fa")
+    public ResponseEntity<?> verify2fa(@Valid @RequestBody Verify2FARequest request) {
+        return userRepository.findByLogin(request.getLogin())
+                .filter(user -> twoFactorAuthenticationService.isTwoFactorCodeValid(user, request.getCode()))
+                .map(user -> {
+                    twoFactorAuthenticationService.clearTwoFactorCode(user);
+                    String token = jwtService.generateToken(user);
+                    return ResponseEntity.ok(new LoginResponse("Authentication successful", token, user.getLogin(), user.getUsername(), user.getRole().toString(), user.isTwoFactorEnabled()));
+                })
+                .orElse(ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new LoginResponse("Invalid 2FA code", null, null, null, null, false)));
+    }
+
     @GetMapping("/users/online")
     public ResponseEntity<List<OnlineUserResponse>> getOnlineUsers() {
         String currentUsername = SecurityContextHolder.getContext().getAuthentication().getName();

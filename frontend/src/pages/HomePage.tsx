@@ -8,8 +8,11 @@ import { useWebRTC } from "../hooks/useWebRTC";
 import type { User } from "../types/types";
 
 function HomePageContent() {
-    const { user, logout } = useAuthContext();
+    const { user, logout, toggle2FA } = useAuthContext();
     const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
+    const [useTurn, setUseTurn] = useState(false);
+
+    console.log("User object in HomePageContent:", user);
 
     const {
         myId,
@@ -17,16 +20,20 @@ function HomePageContent() {
         incomingCall,
         isAudioMuted,
         isVideoEnabled,
+        isScreenSharing,
         localStream,
         remoteStream,
         isRemoteMuted,
+        renegotiationRequired,
         handleCall,
         handleAccept,
         handleReject,
         stopCall,
         toggleAudio,
         toggleVideo,
-    } = useWebRTC(setOnlineUsers);
+        toggleScreenSharing,
+        handleRenegotiate,
+    } = useWebRTC(setOnlineUsers, user?.token || "");
 
     if (!user) {
         return <div>Loading...</div>;
@@ -34,7 +41,7 @@ function HomePageContent() {
 
     return (
         <div style={styles.container}>
-            <Header user={user} onLogout={logout} />
+            <Header user={user} onLogout={logout} onToggle2FA={toggle2FA} />
 
             <div style={styles.body}>
                 <div style={styles.videoContainer}>
@@ -44,13 +51,22 @@ function HomePageContent() {
 
                 <div style={styles.usersContainer}>
                     <h3>Онлайн ({onlineUsers.length})</h3>
+                    <div style={styles.turnCheckboxContainer}>
+                        <input
+                            type="checkbox"
+                            id="useTurn"
+                            checked={useTurn}
+                            onChange={(e) => setUseTurn(e.target.checked)}
+                        />
+                        <label htmlFor="useTurn">Использовать Relay (TURN)</label>
+                    </div>
                     <ul style={styles.userList}>
                         {onlineUsers.map((onlineUser) => (
                             <li key={onlineUser.id} style={styles.userItem}>
                                 {onlineUser.username} ({onlineUser.id}) {onlineUser.inCall ? "В звонке" : ""}
                                 {String(onlineUser.id) !== myId && (
                                     <button
-                                        onClick={() => handleCall(String(onlineUser.id))}
+                                        onClick={() => handleCall(String(onlineUser.id), useTurn)}
                                         disabled={status !== "idle"}
                                         style={styles.callButton}
                                     >
@@ -67,12 +83,16 @@ function HomePageContent() {
                 status={status}
                 isAudioMuted={isAudioMuted}
                 isVideoEnabled={isVideoEnabled}
+                isScreenSharing={isScreenSharing}
                 incomingCall={incomingCall}
+                renegotiationRequired={renegotiationRequired}
                 onAccept={handleAccept}
                 onReject={handleReject}
                 onHangUp={stopCall}
                 onToggleAudio={toggleAudio}
                 onToggleVideo={toggleVideo}
+                onToggleScreenSharing={toggleScreenSharing}
+                onRenegotiate={handleRenegotiate}
                 myId={myId}
                 onlineUsers={onlineUsers}
                 onCall={handleCall}
@@ -134,4 +154,9 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: 4,
     cursor: "pointer",
   },
+    turnCheckboxContainer: {
+        marginBottom: '10px',
+        display: 'flex',
+        alignItems: 'center',
+    },
 };

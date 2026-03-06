@@ -7,6 +7,8 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
     loginInput,
     passwordInput,
     usernameInput,
+    error,
+    loading,
     setAuthMode,
     setLoginInput,
     setPasswordInput,
@@ -41,7 +43,10 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
           }
           setEmailError("");
           setAuthMode(mode);
-          await handleAuth(e);
+          const data = await handleAuth(e);
+          if (data && data.message === "2FA_REQUIRED") {
+            navigate("/verify-2fa", { state: { login: loginInput } });
+          }
         }}
         style={styles.form}
       >
@@ -76,8 +81,9 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
           style={styles.input}
           required
         />
-        <button type="submit" style={styles.buttonPrimary}>
-          {mode === "login" ? "Войти" : "Зарегистрироваться"}
+        {error && <p style={{ color: "red" }}>{error}</p>}
+        <button type="submit" style={styles.buttonPrimary} disabled={loading}>
+          {loading ? "Загрузка..." : mode === "login" ? "Войти" : "Зарегистрироваться"}
         </button>
       </form>
       <p style={{ marginTop: 10 }}>

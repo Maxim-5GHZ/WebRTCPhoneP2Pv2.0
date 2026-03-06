@@ -1,10 +1,19 @@
 version: '3.8'
 
 services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    container_name: frontend_prod_server
+    restart: unless-stopped
+    networks:
+      - app-network
+
   nginx:
     image: your-registry/webrtc-nginx:latest # <-- Замените на ваш образ Nginx
     container_name: nginx_server
-    restart: always
+    restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
@@ -14,11 +23,14 @@ services:
       - /etc/letsencrypt/live/webrtc.yourdomain.com/privkey.pem:/etc/ssl/private/privkey.pem:ro
     networks:
       - app-network
+    depends_on:
+      - frontend
+      - backend
 
   backend:
     image: your-registry/webrtc-backend:latest # <-- Замените на ваш образ бэкенда
     container_name: backend_server
-    restart: always
+    restart: unless-stopped
     environment:
       - MARIADB_HOST=mariadb
       - MARIADB_DATABASE=${MARIADB_DATABASE}
@@ -30,7 +42,7 @@ services:
   mariadb:
     image: mariadb:10.9
     container_name: mariadb_server
-    restart: always
+    restart: unless-stopped
     environment:
       - MARIADB_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
       - MARIADB_DATABASE=${MARIADB_DATABASE}

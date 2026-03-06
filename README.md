@@ -5,8 +5,10 @@
 ## Технологический стек
 
 -   **Бэкенд:** Java 21, Spring Boot, Spring Security, WebSocket, JPA (Hibernate)
--   **Фронтенд:** React.ts, Vite
+-   **Фронтенд:** React.ts, Vite, Nginx (для раздачи статики в production)
 -   **База данных:** MariaDB
+-   **TURN-сервер:** Coturn
+-   **Прокси-сервер:** Nginx
 -   **Контейнеризация:** Docker, Docker Compose
 
 ---
@@ -15,178 +17,107 @@
 
 -   **Docker**
 -   **Docker Compose**
--   **Node.js & npm** (для сборки фронтенда)
 -   **Git**
 
 ---
 
-## Развертывание в Production (на основе реестра образов)
+## 1. Конфигурация
 
-Это рекомендуемый метод развертывания приложения на производственном сервере. Он гарантирует, что на самом сервере не потребуются исходный код или инструменты сборки. Рабочий процесс состоит из локальной сборки образов Docker, их отправки в реестр Docker, а затем извлечения и запуска на сервере.
+Перед первым запуском необходимо настроить переменные окружения.
 
-### Предварительные требования
--   **Локальная машина**: Docker, Docker Compose, Node.js & npm, Git.
--   **Сервер**: Docker, Docker Compose.
--   **Реестр Docker**: Доступ к реестру Docker (например, Docker Hub, GitHub Container Registry, GitLab Container Registry). Вы должны быть авторизованы в своем реестре.
+### Переменные окружения (`.env`)
 
----
+Создайте файл `.env` в корневой директории проекта. Он будет использоваться для всех сред (development и production).
 
-### Часть 1: Конфигурация
-
-#### 1. Nginx для HTTPS
-Для производственного развертывания вы должны использовать HTTPS. Обновите `nginx-docker/conf.d/default.conf` для обработки SSL и перенаправления HTTP-трафика.
-
-**Замените `webrtc.yourdomain.com` на ваш фактический домен.**
-
-```nginx
-# nginx-docker/conf.d/default.conf
-
-# Перенаправление HTTP на HTTPS
-server {
-    listen 80;
-    server_name webrtc.yourdomain.com;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name webrtc.yourdomain.com;
-
-    # Пути к SSL-сертификатам внутри контейнера
-    ssl_certificate /etc/ssl/certs/fullchain.pem;
-    ssl_certificate_key /etc/ssl/private/privkey.pem;
-
-    # Усиление безопасности SSL
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers 'TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256';
-    ssl_prefer_server_ciphers off;
-    
-    # Кэширование статических ресурсов (JS, CSS)
-    # Vite добавляет хэш содержимого к этим именам файлов, поэтому они могут кэшироваться долгое время.
-    location ~* \.(?:css|js)$ {
-        root /usr/share/nginx/dist;
-        try_files $uri =404;
-        expires 1y;
-        add_header Cache-Control "public, immutable";
-    }
-    
-    # Основное расположение для одностраничного приложения
-    location / {
-        root   /usr/share/nginx/dist;
-        index  index.html;
-        try_files $uri $uri/ /index.html;
-    }
-
-    # Прокси для API-запросов
-    location /api/ {
-         proxy_pass http://backend:8080/api/;
-         proxy_set_header Host $host;
-         proxy_set_header X-Real-IP $remote_addr;
-         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-         proxy_set_header X-Forwarded-Proto $scheme;
-    }
-
-    # Прокси для WebSocket-соединений
-    location /signal {
-        proxy_pass http://backend:8080/signal;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-#### 2. Переменные окружения
-Создайте файл `.env` в корне проекта. Он будет использоваться как для локальной разработки, так и на производственном сервере.
 ```env
+# Пароли для базы данных MariaDB
 MARIADB_ROOT_PASSWORD=your_strong_root_password
 MARIADB_DATABASE=webrtc_db
 MARIADB_USER=webrtc_user
 MARIADB_PASSWORD=your_strong_user_password
+
+# Пароль для почтового ящика (если используется)
+MAIL_PASSWORD=your_mail_password
+
+# Секретный пароль для TURN-сервера
+# Этот пароль будет использоваться бэкендом для генерации временных учетных данных для клиентов WebRTC.
+# Вы можете установить его вручную или использовать скрипт для генерации.
+TURN_PASSWORD=your_super_secret_turn_password
+
+# Конфигурация CORS
+# Укажите разрешенные источники (origins) для CORS-запросов.
+# В режиме разработки можно использовать "*", но для production рекомендуется указать конкретные домены.
+# Например: http://localhost:5173,https://your-domain.com
+APP_CORS_ALLOWED_ORIGINS=*
+```
+
+### Ротация пароля TURN-сервера
+
+В проекте есть скрипт для безопасной генерации и обновления секрета `TURN_PASSWORD`. Он автоматически обновит ваш `.env` файл и перезапустит нужные сервисы.
+
+**Для запуска скрипта выполните:**
+```bash
+bash ./rotate_turn_password.sh
+```
+Рекомендуется периодически запускать этот скрипт в production-окружении для повышения безопасности.
+
+---
+
+## 2. Запуск проекта
+
+Проект использует разные файлы `docker-compose` для разделения сред разработки и production.
+
+### Production-окружение
+
+Этот режим предназначен для развертывания на сервере. Он собирает production-ready образы и запускает полный стек сервисов, включая Nginx в качестве прокси.
+
+**Команда для запуска:**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+```
+После запуска приложение будет доступно по адресу вашего сервера (например, `https://your_domain.com`).
+
+**Для остановки:**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.prod.yml down
+```
+
+### Среда для разработки (Development)
+
+Этот режим предназначен для локальной разработки. Он использует `Vite` с горячей перезагрузкой для фронтенда и монтирует исходный код бэкенда в контейнер для отладки.
+
+**Команда для запуска:**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml up --build -d
+```
+После запуска сервисы будут доступны по следующим адресам:
+-   **Фронтенд:** `http://localhost:5173`
+-   **Бэкенд API:** `http://localhost:8080` (через Nginx, если он запущен)
+-   **База данных:** порт `3306` на хосте
+
+**Для остановки:**
+```bash
+docker-compose -f docker-compose.yml -f docker-compose.dev.yml down
 ```
 
 ---
 
-### Часть 2: Сборка и отправка образов (локальная машина)
+## 3. Конфигурация Nginx для Production
 
-#### Шаг 1: Сборка фронтенд-ресурсов
-Сначала создайте статические файлы для фронтенда.
-```bash
-cd frontend
-npm install
-npm run build
-cd ..
-```
-Это создает каталог `dist` внутри папки `frontend`, который необходим для сборки образа Nginx.
+Файл `nginx-docker/conf.d/default.conf` уже настроен для работы в production. Он выполняет следующие задачи:
+-   Перенаправляет весь HTTP трафик на HTTPS.
+-   Проксирует запросы к API (`/api/`) и WebSocket (`/signal`) на бэкенд-сервис.
+-   Проксирует все остальные запросы на production-контейнер фронтенда, который раздает статические файлы.
 
-#### Шаг 2: Сборка и отправка образа бэкенда
-Соберите образ бэкенда, пометьте его для вашего реестра и отправьте.
+Вам нужно только обеспечить наличие валидных SSL-сертификатов. В `docker-compose.prod.yml` указаны пути к сертификатам, которые вы можете получить, например, с помощью Certbot.
 
-**Замените `your-registry` на ваше имя пользователя или организацию в реестре Docker.**
-
-```bash
-docker build -t your-registry/webrtc-backend:latest -f backend/Dockerfile .
-docker push your-registry/webrtc-backend:latest
-```
-
-#### Шаг 3: Сборка и отправка образа Nginx
-Теперь соберите образ Nginx, который включает фронтенд-ресурсы и новую конфигурацию.
-
-```bash
-docker build -t your-registry/webrtc-nginx:latest -f Dockerfile .
-docker push your-registry/webrtc-nginx:latest
-```
-
----
-
-### Часть 3: Развертывание на сервере
-
-#### Шаг 1: Подготовка сервера
-1.  **Установите Docker и Docker Compose** на вашем сервере.
-2.  **Направьте DNS A-запись вашего домена** (например, `webrtc.yourdomain.com`) на IP-адрес вашего сервера.
-3.  **Убедитесь, что порты `80` и `443` открыты** в брандмауэре вашего сервера.
-
-#### Шаг 2: Получение SSL-сертификатов
-Используйте Certbot для получения бесплатного SSL-сертификата от Let's Encrypt.
-```bash
-sudo apt update
-sudo apt install certbot
-sudo certbot certonly --standalone -d webrtc.yourdomain.com
-```
-Это создаст сертификаты в `/etc/letsencrypt/live/webrtc.yourdomain.com/`.
-
-#### Шаг 3: Копирование файлов на сервер
-Вам нужны только два файла на вашем сервере: `docker-compose.prod.yml` и `.env`.
-
-Создайте каталог для вашего приложения на сервере:
-```bash
-mkdir -p /opt/webrtc-app
-cd /opt/webrtc-app
-```
-Теперь скопируйте файлы `docker-compose.prod.yml` и `.env` в этот каталог. **Обязательно замените имена образов-заполнителей в `docker-compose.prod.yml` на ваши фактические имена образов.**
-
-#### Шаг 4: Запуск приложения
-Войдите в свой реестр Docker на сервере:
-```bash
-docker login your-registry
-```
-Затем извлеките образы и запустите службы, используя `docker-compose.prod.yml`:
-```bash
-docker-compose -f docker-compose.prod.yml pull
-docker-compose -f docker-compose.prod.yml up -d
-```
-Ваше приложение теперь доступно по адресу `https://webrtc.yourdomain.com`.
-
----
-
-### Локальная разработка
-Для локальной разработки вы по-прежнему можете использовать оригинальный файл `docker-compose.yml`. Этот файл использует локальный код и включает горячую перезагрузку для более быстрой разработки.
-```bash
-# Для запуска среды локальной разработки
-docker-compose up --build -d
-
-# Для остановки
-docker-compose down
+```yaml
+# docker-compose.prod.yml
+services:
+  nginx:
+    # ...
+    volumes:
+      # Замените на реальные пути к вашим сертификатам на хост-машине
+      - /etc/letsencrypt/live/webrtc.yourdomain.com/fullchain.pem:/etc/ssl/certs/fullchain.pem:ro
+      - /etc/letsencrypt/live/webrtc.yourdomain.com/privkey.pem:/etc/ssl/private/privkey.pem:ro
 ```

@@ -1,0 +1,10 @@
+Fix(backend): Resolve NullPointerException in AuthController
+
+The `twoFactorEnabled` field in the `User` entity was a primitive `boolean`, which caused a `NullPointerException` when the corresponding database column was `NULL`.
+
+This commit fixes the issue by:
+- Changing the `twoFactorEnabled` field in the `User` entity to the `Boolean` wrapper class.
+- Adding `@Column(name = "two_factor_enabled", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")` to the `twoFactorEnabled` field to enforce a non-null constraint and set a default value at the database level.
+- Adding a test to verify the fix.
+- Fixing the test by providing a valid email and role for the test user.
+- Fixing the test by encoding the password before saving the user.

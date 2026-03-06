@@ -1,15 +1,24 @@
 package controllers;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
 import models.User;
+import org.kurento.client.IceCandidate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 import repositories.UserRepository;
+import services.webrtc.Room;
+import services.webrtc.RoomManager;
+import services.webrtc.UserRegistry;
+import services.webrtc.UserSession;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -28,12 +37,21 @@ public class SocketHandler extends TextWebSocketHandler {
     private final Map<Long, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final Map<Long, Boolean> userInCallStatus = new ConcurrentHashMap<>();
     private final Map<Long, Long> userPeers = new ConcurrentHashMap<>(); // Карта для отслеживания пиров
+    private final Object callLock = new Object();
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
+
+    @Autowired
+    private RoomManager roomManager;
+
+    @Autowired
+    private UserRegistry registry;
+    private static final Gson gson = new GsonBuilder().create();
 
 
     /**
      * Конструктор для внедрения зависимостей. @param objectMapper-объект для сопоставления JSON.
+     *
      * @param userRepository
      */
     public SocketHandler(ObjectMapper objectMapper,
@@ -44,6 +62,7 @@ public class SocketHandler extends TextWebSocketHandler {
 
     /**
      * Вызывается после успешного установления соединения WebSocket.
+     *
      * @param session Установленный сеанс.
      */
     @Override
@@ -82,130 +101,235 @@ public class SocketHandler extends TextWebSocketHandler {
 
     /**
      * Вызывается после закрытия соединения WebSocket.
+     *
      * @param session Закрытый сеанс.
-     * @param status Статус закрытия.
+     * @param status  Статус закрытия.
      */
     @Override
-    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) {
+    public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws IOException {
         Long userId = getUserId(session);
         if (userId != null) {
-            // Если пользователь был в звонке, уведомляем его собеседника
-            if (userPeers.containsKey(userId)) {
-                Long peerId = userPeers.get(userId);
-                WebSocketSession peerSession = sessions.get(peerId);
-                if (peerSession != null && peerSession.isOpen()) {
-                    sendMessage(peerSession, Map.of("type", "hang-up", "from", userId));
+            synchronized (callLock) {
+                // Если пользователь был в звонке, уведомляем его собеседника
+                if (userPeers.containsKey(userId)) {
+                    Long peerId = userPeers.get(userId);
+                    WebSocketSession peerSession = sessions.get(peerId);
+                    if (peerSession != null && peerSession.isOpen()) {
+                        sendMessage(peerSession, Map.of("type", "hang-up", "from", userId));
+                    }
+                    userPeers.remove(peerId);
+                    userInCallStatus.put(peerId, false);
+                    broadcast(Map.of("type", "user-in-call-status-changed", "userId", peerId, "inCall", false));
+
                 }
-                userPeers.remove(peerId);
-                userInCallStatus.put(peerId, false);
-                broadcast(Map.of("type", "user-in-call-status-changed", "userId", peerId, "inCall", false));
 
+                sessions.remove(userId);
+                userInCallStatus.remove(userId); // Удаление статуса звонка
+                userPeers.remove(userId);
             }
-
-            sessions.remove(userId);
-            userInCallStatus.remove(userId); // Удаление статуса звонка
-            userPeers.remove(userId);
 
             logger.info("[Disconnected] User ID: {}", userId);
 
             // Уведомляем всех остальных пользователей об отключении
             broadcast(Map.of("type", "user-disconnected", "userId", userId));
         }
+        UserSession user = registry.removeBySession(session);
+        if (user != null) {
+            Room room = roomManager.getRoom(user.getRoomName());
+            room.leave(user);
+        }
     }
+
     private void broadcast(Map<String, Object> message) {
+        String jsonMessage;
+        try {
+            jsonMessage = objectMapper.writeValueAsString(message);
+        } catch (IOException e) {
+            logger.error("Error serializing broadcast message", e);
+            return;
+        }
+
         sessions.values().forEach(session -> {
             try {
-                sendMessage(session, message);
-            } catch (Exception e) {
-                logger.error("Error broadcasting message to session {}", session.getId(), e);
+                synchronized (session) {
+                    if (session.isOpen()) {
+                        session.sendMessage(new TextMessage(jsonMessage));
+                    }
+                }
+            } catch (IOException e) {
+                logger.error("Error broadcasting message to session {}: {}", session.getId(), e.getMessage());
             }
         });
     }
+
     /**
      * Обрабатывает входящие текстовые сообщения WebSocket.
+     *
      * @param session Сеанс, отправивший сообщение.
      * @param message Полученное сообщение.
      */
     @Override
-    protected void handleTextMessage(WebSocketSession session, TextMessage message) {
-        try {
-            Long fromUserId = getUserId(session);
-            if (fromUserId == null) return;
+    protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
+        Long fromUserId = getUserId(session);
+        if (fromUserId == null) return;
 
+        JsonObject jsonMessage = gson.fromJson(message.getPayload(), JsonObject.class);
+        final UserSession user = registry.getBySession(session);
+        if (user != null) {
+            logger.debug("Incoming message from user '{}': {}", user.getName(), jsonMessage);
+        } else {
+            logger.debug("Incoming message from new user: {}", jsonMessage);
+        }
+
+
+        try {
             Map<String, Object> payload = objectMapper.readValue(message.getPayload(), HashMap.class);
             String type = (String) payload.get("type");
 
-            Long toUserId = getToUserId(payload.get("to"));
+            if (type != null) {
+                Long toUserId = getToUserId(payload.get("to"));
 
-            if (toUserId == null) {
-                logger.warn("Recipient user ID ('to') is missing or invalid in payload: {}", payload);
-                return; // Или отправить ошибку отправителю
+                if (toUserId == null) {
+                    logger.warn("Recipient user ID ('to') is missing or invalid in payload: {}", payload);
+                    return; // Или отправить ошибку отправителю
+                }
+
+
+                WebSocketSession recipient = sessions.get(toUserId);
+                if (recipient == null || !recipient.isOpen()) {
+                    logger.warn("Recipient User ID {} not found or session is closed", toUserId);
+                    // Можно отправить сообщение об ошибке отправителю
+                    sendMessage(session, Map.of("type", "error", "message", "User " + toUserId + " is not online."));
+                    return;
+                }
+
+                switch (type) {
+                    case "call-user":
+                        handleCallUser(session, fromUserId, toUserId, payload, recipient);
+                        break;
+                    case "make-answer":
+                        handleMakeAnswer(fromUserId, toUserId, payload, recipient);
+                        break;
+                    case "ice-candidate":
+                        handleIceCandidate(fromUserId, toUserId, payload, recipient);
+                        break;
+                    case "hang-up":
+                        handleHangUp(fromUserId, toUserId, recipient);
+                        break;
+                    case "request-turn-renegotiation":
+                        sendMessage(recipient, Map.of("type", "request-turn-renegotiation", "from", fromUserId));
+                        break;
+                    default:
+                        logger.warn("Unknown message type: {}", type);
+                }
+            } else {
+                switch (jsonMessage.get("id").getAsString()) {
+                    case "joinRoom":
+                        joinRoom(jsonMessage, session);
+                        break;
+                    case "receiveVideoFrom":
+                        final String senderName = jsonMessage.get("sender").getAsString();
+                        final UserSession sender = registry.getBySession(session);
+                        final String sdpOffer = jsonMessage.get("sdpOffer").getAsString();
+                        if (sender != null) {
+                            user.receiveVideoFrom(sender, sdpOffer);
+                        }
+                        break;
+                    case "leaveRoom":
+                        leaveRoom(user);
+                        break;
+                    case "onIceCandidate":
+                        JsonObject candidate = jsonMessage.get("candidate").getAsJsonObject();
+
+                        if (user != null) {
+                            IceCandidate cand = new IceCandidate(candidate.get("candidate").getAsString(),
+                                    candidate.get("sdpMid").getAsString(), candidate.get("sdpMLineIndex").getAsInt());
+                            user.addCandidate(cand, jsonMessage.get("name").getAsString());
+                        }
+                        break;
+                    default:
+                        break;
+                }
             }
-
-
-            WebSocketSession recipient = sessions.get(toUserId);
-            if (recipient == null || !recipient.isOpen()) {
-                logger.warn("Recipient User ID {} not found or session is closed", toUserId);
-                // Можно отправить сообщение об ошибке отправителю
-                sendMessage(session, Map.of("type", "error", "message", "User " + toUserId + " is not online."));
-                return;
-            }
-
-            switch (type) {
-                case "call-user":
-                    handleCallUser(session, fromUserId, toUserId, payload,recipient);
-                    break;
-                case "make-answer":
-                    handleMakeAnswer(fromUserId, toUserId, payload, recipient);
-                    break;
-                case "ice-candidate":
-                    handleIceCandidate(fromUserId, toUserId, payload, recipient);
-                    break;
-                case "hang-up":
-                    handleHangUp(fromUserId, toUserId, recipient);
-                    break;
-                default:
-                    logger.warn("Unknown message type: {}", type);
-            }
+        } catch (IOException e) {
+            logger.error("IO error handling message from user {}: {}", fromUserId, e.getMessage());
         } catch (Exception e) {
-            logger.error("Error handling message: {}", e.getMessage(), e);
+            logger.error("Unexpected error handling message from user {}: {}", fromUserId, e.getMessage(), e);
         }
     }
+
+    private void joinRoom(JsonObject params, WebSocketSession session) throws IOException {
+        final String roomName = params.get("room").getAsString();
+        final String name = params.get("name").getAsString();
+        logger.info("PARTICIPANT {}: trying to join room {}", name, roomName);
+
+        Room room = roomManager.getRoom(roomName);
+        final UserSession user = room.join(name, session);
+        registry.register(user);
+    }
+
+    private void leaveRoom(UserSession user) throws IOException {
+        final Room room = roomManager.getRoom(user.getRoomName());
+        room.leave(user);
+        if (room.getParticipants().isEmpty()) {
+            roomManager.removeRoom(room);
+        }
+    }
+
+
     private void handleCallUser(WebSocketSession fromSession, Long fromUserId, Long toUserId, Map<String, Object> payload, WebSocketSession recipient) {
-        if (userInCallStatus.getOrDefault(toUserId, false)) {
-            sendMessage(fromSession, Map.of("type", "call-rejected", "reason", "User is already in a call."));
-        } else {
-            // Помечаем обоих пользователей как "в звонке"
-            userInCallStatus.put(fromUserId, true);
-            userInCallStatus.put(toUserId, true);
-            //Связываем пользователей в звонке
-            userPeers.put(fromUserId, toUserId);
-            userPeers.put(toUserId, fromUserId);
+        synchronized (callLock) {
+            if (userInCallStatus.getOrDefault(toUserId, false)) {
+                sendMessage(fromSession, Map.of("type", "call-rejected", "reason", "User is already in a call."));
+            } else {
+                // Помечаем обоих пользователей как "в звонке"
+                userInCallStatus.put(fromUserId, true);
+                userInCallStatus.put(toUserId, true);
+                //Связываем пользователей в звонке
+                userPeers.put(fromUserId, toUserId);
+                userPeers.put(toUserId, fromUserId);
 
 
-            // Уведомляем всех о том что пользователи в звонке
-            broadcast(Map.of("type", "user-in-call-status-changed", "userId", fromUserId, "inCall", true));
-            broadcast(Map.of("type", "user-in-call-status-changed", "userId", toUserId, "inCall", true));
+                // Уведомляем всех о том что пользователи в звонке
+                broadcast(Map.of("type", "user-in-call-status-changed", "userId", fromUserId, "inCall", true));
+                broadcast(Map.of("type", "user-in-call-status-changed", "userId", toUserId, "inCall", true));
 
 
-            // Пересылаем предложение, добавляя от кого оно
-            Object offer = payload.get("offer");
-            sendMessage(recipient, Map.of("type", "call-made", "offer", offer, "from", fromUserId));
+                // Пересылаем предложение, добавляя от кого оно
+                Object offer = payload.get("offer");
+                Map<String, Object> messageMap = new HashMap<>();
+                messageMap.put("type", "call-made");
+                messageMap.put("offer", offer);
+                messageMap.put("from", fromUserId);
+                // Forward the useTurn flag if it exists
+                if (payload.containsKey("useTurn")) {
+                    messageMap.put("useTurn", payload.get("useTurn"));
+                }
+                sendMessage(recipient, messageMap);
+            }
         }
     }
 
     private void handleMakeAnswer(Long fromUserId, Long toUserId, Map<String, Object> payload, WebSocketSession recipient) {
-        if(!userPeers.containsKey(fromUserId) || !userPeers.get(fromUserId).equals(toUserId)){
+        if (!userPeers.containsKey(fromUserId) || !userPeers.get(fromUserId).equals(toUserId)) {
             logger.warn("User {} is not in a call with user {}", fromUserId, toUserId);
             return;
         }
         // Просто пересылаем ответ
         Object answer = payload.get("answer");
-        sendMessage(recipient, Map.of("type", "answer-made", "answer", answer, "from", fromUserId));
+        Map<String, Object> messageMap = new HashMap<>();
+        messageMap.put("type", "answer-made");
+        messageMap.put("answer", answer);
+        messageMap.put("from", fromUserId);
+        // Forward the useTurn flag if it exists
+        if (payload.containsKey("useTurn")) {
+            messageMap.put("useTurn", payload.get("useTurn"));
+        }
+        sendMessage(recipient, messageMap);
     }
 
     private void handleIceCandidate(Long fromUserId, Long toUserId, Map<String, Object> payload, WebSocketSession recipient) {
-        if(!userPeers.containsKey(fromUserId) || !userPeers.get(fromUserId).equals(toUserId)){
+        if (!userPeers.containsKey(fromUserId) || !userPeers.get(fromUserId).equals(toUserId)) {
             logger.warn("User {} is not in a call with user {}", fromUserId, toUserId);
             return;
         }
@@ -213,21 +337,24 @@ public class SocketHandler extends TextWebSocketHandler {
         Object candidate = payload.get("candidate");
         sendMessage(recipient, Map.of("type", "ice-candidate", "candidate", candidate, "from", fromUserId));
     }
+
     private void handleHangUp(Long fromUserId, Long toUserId, WebSocketSession recipient) {
-        // Сбрасываем статус "в звонке" для обоих пользователей
-        userInCallStatus.put(fromUserId, false);
-        userInCallStatus.put(toUserId, false);
+        synchronized (callLock) {
+            // Сбрасываем статус "в звонке" для обоих пользователей
+            userInCallStatus.put(fromUserId, false);
+            userInCallStatus.put(toUserId, false);
 
-        // Убираем связь
-        userPeers.remove(fromUserId);
-        userPeers.remove(toUserId);
+            // Убираем связь
+            userPeers.remove(fromUserId);
+            userPeers.remove(toUserId);
 
-        // Уведомляем всех о том что пользователи не в звонке
-        broadcast(Map.of("type", "user-in-call-status-changed", "userId", fromUserId, "inCall", false));
-        broadcast(Map.of("type", "user-in-call-status-changed", "userId", toUserId, "inCall", false));
+            // Уведомляем всех о том что пользователи не в звонке
+            broadcast(Map.of("type", "user-in-call-status-changed", "userId", fromUserId, "inCall", false));
+            broadcast(Map.of("type", "user-in-call-status-changed", "userId", toUserId, "inCall", false));
 
-        // Уведомляем другого пользователя о завершении звонка
-        sendMessage(recipient, Map.of("type", "hang-up", "from", fromUserId));
+            // Уведомляем другого пользователя о завершении звонка
+            sendMessage(recipient, Map.of("type", "hang-up", "from", fromUserId));
+        }
     }
 
 
@@ -243,8 +370,10 @@ public class SocketHandler extends TextWebSocketHandler {
         }
         return null;
     }
+
     /**
      * Отправляет сообщение JSON указанному сеансу.
+     *
      * @param session Сеанс для отправки сообщения.
      * @param payload Данные для отправки.
      */
@@ -269,6 +398,7 @@ public class SocketHandler extends TextWebSocketHandler {
     public java.util.Set<Long> getOnlineUserIds() {
         return sessions.keySet();
     }
+
     public boolean isUserInCall(Long userId) {
         return userInCallStatus.getOrDefault(userId, false);
     }

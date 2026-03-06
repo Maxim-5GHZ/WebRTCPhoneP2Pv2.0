@@ -1,0 +1,6 @@
+# TURN server configuration
+listening-port=3478
+fingerprint
+lt-cred-mech
+realm=mydomain.com
+user=${TURN_USERNAME}:${TURN_PASSWORD}

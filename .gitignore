@@ -59,9 +59,11 @@ Thumbs.db
 # For web projects
 /frontend/dist
 /backend/target
+/nginx-docker/dist/
 
 # Other
 *.bak
 *.swp
 *~
 .#*
+/backend/.idea/
