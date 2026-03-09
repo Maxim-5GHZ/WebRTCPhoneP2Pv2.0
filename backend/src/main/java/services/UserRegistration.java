@@ -33,7 +33,10 @@ public class UserRegistration {
         if (userRepository.findByLogin(login).isPresent()) {
             throw new RuntimeException("User with this login already exists");
         }
+        
+        if (mailCheck.Check(login)) throw new RuntimeException("запрещенный почтовый домен");
 
+        
         // 2. Хешируем пароль
         String hashedPassword = generateHashFromPassword(rawPassword);
 
