@@ -8,6 +8,7 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
     passwordInput,
     usernameInput,
     error,
+    successMessage,
     loading,
     setAuthMode,
     setLoginInput,
@@ -82,6 +83,7 @@ export function Auth({ mode }: { mode: "login" | "register" }) {
           required
         />
         {error && <p style={{ color: "red" }}>{error}</p>}
+        {successMessage && <p style={{ color: "green" }}>{successMessage}</p>}
         <button type="submit" style={styles.buttonPrimary} disabled={loading}>
           {loading ? "Загрузка..." : mode === "login" ? "Войти" : "Зарегистрироваться"}
         </button>

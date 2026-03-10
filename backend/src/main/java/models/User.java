@@ -30,7 +30,13 @@ public class User {
     
     @Enumerated(EnumType.STRING)
     @Column(name="activation",nullable = false)
-    private UserActivate activation = UserActivate.Enable;
+    private UserActivate activation = UserActivate.Disable;
+
+    @Column(name = "verification_token")
+    private String verificationToken;
+
+    @Column(name = "verification_token_expires")
+    private LocalDateTime verificationTokenExpires;
 
     @Column(name = "two_factor_code")
     private String twoFactorCode;
@@ -62,6 +68,7 @@ public class User {
         this.password = password;
         this.role= role;
         this.twoFactorEnabled = true;
+        this.activation = UserActivate.Disable;
     }
 
 
@@ -108,6 +115,23 @@ public class User {
     public void setTwoFactorCodeExpires(LocalDateTime twoFactorCodeExpires) {
         this.twoFactorCodeExpires = twoFactorCodeExpires;
     }
+
+    public String getVerificationToken() {
+        return verificationToken;
+    }
+
+    public void setVerificationToken(String verificationToken) {
+        this.verificationToken = verificationToken;
+    }
+
+    public LocalDateTime getVerificationTokenExpires() {
+        return verificationTokenExpires;
+    }
+
+    public void setVerificationTokenExpires(LocalDateTime verificationTokenExpires) {
+        this.verificationTokenExpires = verificationTokenExpires;
+    }
+
     //  Реализация equals и hashCode по ID (защита от ошибок в коллекциях)
     @Override
     public boolean equals(Object o) {
