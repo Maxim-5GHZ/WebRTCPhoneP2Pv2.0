@@ -20,6 +20,9 @@ public class EmailService {
     @Value("${spring.mail.username}")
     private String fromEmail;
 
+    @Value("${app.baseUrl}")
+    private String baseUrl;
+
     public void sendTwoFactorCode(String to, String code) {
         try {
             SimpleMailMessage message = new SimpleMailMessage();
@@ -32,6 +35,21 @@ public class EmailService {
         } catch (MailException e) {
             logger.error("Failed to send 2FA code email to {}", to, e);
             // Consider re-throwing a custom exception or handling the failure appropriately
+        }
+    }
+
+    public void sendVerificationEmail(String to, String token) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom(fromEmail);
+            message.setTo(to);
+            message.setSubject("Account Verification");
+            String verificationUrl = baseUrl + "/verify-email?token=" + token;
+            message.setText("To verify your account, please click the following link: " + verificationUrl);
+            mailSender.send(message);
+            logger.info("Verification email sent to {}", to);
+        } catch (MailException e) {
+            logger.error("Failed to send verification email to {}", to, e);
         }
     }
 }

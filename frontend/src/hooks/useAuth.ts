@@ -38,6 +38,7 @@ export function useAuth() {
   const [MfaRequired, setMfaRequired] = useState<boolean>(false)
   const [loginFor2FA, setLoginFor2FA] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(true); // Start with loading true for initial auth check
 
       const processLoginResponse = useCallback((data: { token: string }) => {
@@ -61,6 +62,7 @@ export function useAuth() {
   const handleAuth = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null); // Clear any previous success messages
     setLoading(true);
     const endpoint = authMode === "login" ? "/login" : "/register";
     const body =
@@ -85,7 +87,13 @@ export function useAuth() {
         return null;
       }
       
-      if (data.message === '2FA_REQUIRED') {
+      if (authMode === "register" && data.message === "Registration successful. Please check your email to verify your account.") {
+          setSuccessMessage(data.message);
+          setLoginInput("");
+          setPasswordInput("");
+          setUsernameInput("");
+          return data;
+      } else if (data.message === '2FA_REQUIRED') {
         setMfaRequired(true)
         setLoginFor2FA(loginInput);
       } else if (data.token) {
@@ -188,6 +196,7 @@ export function useAuth() {
     MfaRequired,
     loginFor2FA,
     error,
+    successMessage,
     loading,
     setAuthMode,
     setLoginInput,
@@ -197,5 +206,5 @@ export function useAuth() {
     logout,
     verify2FA,
     toggle2FA,
-  }), [user, isAdmin, authMode, loginInput, passwordInput, usernameInput, MfaRequired, loginFor2FA, error, loading, handleAuth, logout, verify2FA, toggle2FA]);
+  }), [user, isAdmin, authMode, loginInput, passwordInput, usernameInput, MfaRequired, loginFor2FA, error, successMessage, loading, handleAuth, logout, verify2FA, toggle2FA]);
 }

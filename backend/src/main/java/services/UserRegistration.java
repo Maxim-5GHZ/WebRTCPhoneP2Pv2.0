@@ -6,16 +6,21 @@ import enums.UserRole;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
+import java.util.UUID;
+
 @Service
 public class UserRegistration {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     // Внедряем зависимости через конструктор
-    public UserRegistration(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserRegistration(UserRepository userRepository, PasswordEncoder passwordEncoder, EmailService emailService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     /**
@@ -29,19 +34,28 @@ public class UserRegistration {
      * Пример метода регистрации нового пользователя
      */
     public User registerNewUser(String username, String login, String rawPassword) {
-        // 1. Проверяем, не занят ли логин
-        if (userRepository.findByLogin(login).isPresent()) {
-            throw new RuntimeException("User with this login already exists");
+        if (!MailCheck.isAllowed(login)) {
+            throw new RuntimeException("Запрещенный почтовый домен");
         }
 
+        
         // 2. Хешируем пароль
         String hashedPassword = generateHashFromPassword(rawPassword);
 
         // 3. Создаем объект пользователя (используем ваш конструктор)
         User newUser = new User(username, login, hashedPassword, UserRole.Base);
 
+        String token = UUID.randomUUID().toString();
+        newUser.setVerificationToken(token);
+        newUser.setVerificationTokenExpires(LocalDateTime.now().plusHours(24));
+
         // 4. Сохраняем в БД
-        return userRepository.save(newUser);
+        userRepository.save(newUser);
+
+        // 5. Отправляем письмо с подтверждением
+        emailService.sendVerificationEmail(newUser.getLogin(), token);
+        
+        return newUser;
     }
 
     /**

@@ -10,7 +10,7 @@ public class RegisterRequest {
     private String username;
 
     @NotBlank(message = "Логин не может быть пустым")
-    @Email(message = "Логин должен быть в формате email")
+    @Email(message = "Логин должен быть в формате email и только сервисов яндекс и гугл")
     private String login;
 
     @NotBlank(message = "Пароль не может быть пустым")
