@@ -33,10 +33,11 @@ public class Room implements Closeable {
         log.info("ROOM {} has been created", name);
     }
 
-    public UserSession join(String userName, WebSocketSession session) throws IOException {
+    public UserSession join(String userName, WebSocketSession session, String sdpOffer) throws IOException {
         log.info("USER {}: trying to join room {}", userName, this.name);
         UserSession participant = new UserSession(userName, this.name, session, this.pipeline);
-        join(participant);
+        String sdpAnswer = participant.start(sdpOffer);
+        join(participant, sdpAnswer);
         participants.put(userName, participant);
         return participant;
     }
@@ -49,7 +50,7 @@ public class Room implements Closeable {
     }
 
 
-    private Collection<UserSession> join(UserSession newParticipant) throws IOException {
+    private Collection<UserSession> join(UserSession newParticipant, String sdpAnswer) throws IOException {
         final JsonObject newParticipantMsg = new JsonObject();
         newParticipantMsg.addProperty("id", "newParticipantArrived");
         newParticipantMsg.addProperty("name", newParticipant.getName());
@@ -57,6 +58,7 @@ public class Room implements Closeable {
         final List<String> existingUsers = new ArrayList<>(this.participants.keySet());
         final JsonObject existingParticipantsMsg = new JsonObject();
         existingParticipantsMsg.addProperty("id", "existingParticipants");
+        existingParticipantsMsg.addProperty("sdpAnswer", sdpAnswer);
         JsonArray array = new JsonArray();
         for (String user: existingUsers) {
             array.add(user);

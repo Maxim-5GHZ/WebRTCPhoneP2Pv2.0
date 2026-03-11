@@ -10,31 +10,31 @@ const ICE_SERVERS = {
     ],
 };
 
-export const useConference = (roomId: string) => {
+export const useBroadcast = (roomId: string, isBroadcaster: boolean) => {
     const { user } = useAuthContext();
     const { socket } = useSocket();
     const navigate = useNavigate();
-
     const [localStream, setLocalStream] = useState<MediaStream | null>(null);
     const [peers, setPeers] = useState<Record<string, RTCPeerConnection>>({});
     const peerMediaElements = useRef<Record<string, HTMLVideoElement>>({});
-    
+
     const [isAudioMuted, setIsAudioMuted] = useState(false);
     const [isVideoEnabled, setIsVideoEnabled] = useState(true);
     const [isScreenSharing, setIsScreenSharing] = useState(false);
     const localVideoTrackRef = useRef<MediaStreamTrack | null>(null);
     const localStreamRef = useRef<MediaStream | null>(null);
 
-
     useEffect(() => {
         const startStream = async () => {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true,
-            });
-            setLocalStream(stream);
-            localStreamRef.current = stream;
-            localVideoTrackRef.current = stream.getVideoTracks()[0];
+            if (isBroadcaster) {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true,
+                });
+                setLocalStream(stream);
+                localStreamRef.current = stream;
+                localVideoTrackRef.current = stream.getVideoTracks()[0];
+            }
         };
 
         startStream();
@@ -44,10 +44,11 @@ export const useConference = (roomId: string) => {
                 localStreamRef.current.getTracks().forEach((track) => track.stop());
             }
         };
-    }, []);
+    }, [isBroadcaster]);
 
     useEffect(() => {
-        if (!socket || !localStream || !user) return;
+        if (!socket || !user) return;
+        if (isBroadcaster && !localStream) return;
 
         socket.onmessage = (event) => {
             const message = JSON.parse(event.data);
@@ -64,22 +65,31 @@ export const useConference = (roomId: string) => {
                     handleCandidate(message.candidate, fromId);
                     break;
                 case "user_joined":
-                    createPeerConnection(message.userId);
+                    if (isBroadcaster) {
+                        createPeerConnection(message.userId);
+                    }
                     break;
                 case "user_left":
                     handleUserLeft(message.userId);
+                    break;
+                case "start_broadcast":
+                    if (!isBroadcaster) {
+                        createPeerConnection(message.userId, true);
+                    }
                     break;
                 default:
                     break;
             }
         };
 
-        const createPeerConnection = (userId: string) => {
+        const createPeerConnection = (userId: string, isViewer: boolean = false) => {
             const peerConnection = new RTCPeerConnection(ICE_SERVERS);
 
-            localStream.getTracks().forEach((track) => {
-                peerConnection.addTrack(track, localStream);
-            });
+            if (isBroadcaster) {
+                localStream?.getTracks().forEach((track) => {
+                    peerConnection.addTrack(track, localStream);
+                });
+            }
 
             peerConnection.onicecandidate = (event) => {
                 if (event.candidate) {
@@ -97,6 +107,18 @@ export const useConference = (roomId: string) => {
                     videoElement.srcObject = event.streams[0];
                 }
             };
+            
+            if (isViewer) {
+                // For viewers, we need to send an offer
+                peerConnection.createOffer().then(offer => {
+                    peerConnection.setLocalDescription(offer);
+                    socket.send(JSON.stringify({
+                        type: "offer",
+                        offer,
+                        to: userId,
+                    }));
+                });
+            }
 
             setPeers((prev) => ({ ...prev, [userId]: peerConnection }));
             return peerConnection;
@@ -132,15 +154,19 @@ export const useConference = (roomId: string) => {
             }
         };
 
-        socket.send(JSON.stringify({ type: "join_room", roomId }));
+        if (isBroadcaster) {
+            socket.send(JSON.stringify({ type: "start_broadcast", roomId }));
+        } else {
+            socket.send(JSON.stringify({ type: "join_room", roomId }));
+        }
 
-    }, [socket, localStream, user, peers, roomId]);
+    }, [socket, localStream, user, peers, roomId, isBroadcaster]);
 
     const addVideoElement = (userId: string, element: HTMLVideoElement) => {
         peerMediaElements.current[userId] = element;
     };
-    
-    const leaveConference = () => {
+
+    const stopBroadcast = () => {
         Object.values(peers).forEach(pc => pc.close());
         setPeers({});
         if (localStreamRef.current) {
@@ -214,7 +240,6 @@ export const useConference = (roomId: string) => {
         }
     };
 
-
     return { 
         localStream, 
         peers, 
@@ -225,6 +250,6 @@ export const useConference = (roomId: string) => {
         toggleAudio,
         toggleVideo,
         toggleScreenSharing,
-        leaveConference
+        stopBroadcast
     };
 };

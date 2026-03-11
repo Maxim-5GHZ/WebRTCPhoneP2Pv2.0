@@ -1,16 +1,13 @@
-import React, { useState } from "react";
+import React from "react";
 import { VideoPlayer } from "../components/VideoPlayer";
 import { CallControls } from "../components/CallControls";
 import { Header } from "../components/Header";
 import { useAuthContext } from "../hooks/useAuth";
 import { SocketProvider } from "../contexts/SocketProvider";
 import { useWebRTC } from "../hooks/useWebRTC";
-import type { User } from "../types/types";
 
 function HomePageContent() {
     const { user, logout, toggle2FA } = useAuthContext();
-    const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
-    const [useTurn, setUseTurn] = useState(false);
 
     console.log("User object in HomePageContent:", user);
 
@@ -33,7 +30,8 @@ function HomePageContent() {
         toggleVideo,
         toggleScreenSharing,
         handleRenegotiate,
-    } = useWebRTC(setOnlineUsers, user?.token || "");
+        onlineUsers,
+    } = useWebRTC(user?.token || "");
 
     if (!user) {
         return <div>Loading...</div>;
@@ -51,22 +49,14 @@ function HomePageContent() {
 
                 <div style={styles.usersContainer}>
                     <h3>Онлайн ({onlineUsers.length})</h3>
-                    <div style={styles.turnCheckboxContainer}>
-                        <input
-                            type="checkbox"
-                            id="useTurn"
-                            checked={useTurn}
-                            onChange={(e) => setUseTurn(e.target.checked)}
-                        />
-                        <label htmlFor="useTurn">Использовать Relay (TURN)</label>
-                    </div>
+                    
                     <ul style={styles.userList}>
                         {onlineUsers.map((onlineUser) => (
                             <li key={onlineUser.id} style={styles.userItem}>
                                 {onlineUser.username} ({onlineUser.id}) {onlineUser.inCall ? "В звонке" : ""}
                                 {String(onlineUser.id) !== myId && (
                                     <button
-                                        onClick={() => handleCall(String(onlineUser.id), useTurn)}
+                                        onClick={() => handleCall(String(onlineUser.id), false)}
                                         disabled={status !== "idle"}
                                         style={styles.callButton}
                                     >

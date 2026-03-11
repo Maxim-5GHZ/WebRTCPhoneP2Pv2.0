@@ -72,10 +72,10 @@ export function CallControls({
           <p>Входящий от: {incomingCall?.from}</p>
           <div style={{ display: "flex", gap: 10, justifyContent: 'center' }}>
             <button onClick={() => onAccept(false)} style={styles.buttonSuccess}>
-              Принять (P2P)
+              Принять (pure p2p)
             </button>
             <button onClick={() => onAccept(true)} style={styles.buttonPrimary}>
-              Принять (Relay)
+              Принять (turn p2p)
             </button>
             <button onClick={onReject} style={styles.buttonDanger}>
               Отклонить

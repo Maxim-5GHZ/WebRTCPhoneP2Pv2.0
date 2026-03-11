@@ -1,11 +1,13 @@
 import React from 'react';
-import { useConference } from '../hooks/useConference';
+import { useBroadcast } from '../hooks/useBroadcast';
 import { VideoPlayer } from '../components/VideoPlayer';
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { CallControls } from '../components/CallControls';
 
-const ConferencePage: React.FC = () => {
+const BroadcastPage: React.FC = () => {
     const { roomName } = useParams<{ roomName: string }>();
+    const location = useLocation();
+    const isBroadcaster = location.state?.isBroadcaster || false;
     const { 
         localStream, 
         peers, 
@@ -16,17 +18,17 @@ const ConferencePage: React.FC = () => {
         toggleAudio,
         toggleVideo,
         toggleScreenSharing,
-        leaveConference
-    } = useConference(roomName ?? "default-room");
+        stopBroadcast
+    } = useBroadcast(roomName ?? "default-room", isBroadcaster);
 
     return (
         <div>
-            <h1>Conference Page</h1>
+            <h1>Broadcast Page</h1>
             <h2>Room: {roomName}</h2>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', justifyContent: 'center' }}>
-                {localStream && (
+                {isBroadcaster && localStream && (
                     <div key="local">
-                        <p>You</p>
+                        <p>You (Broadcaster)</p>
                         <VideoPlayer stream={localStream} muted={true} />
                     </div>
                 )}
@@ -46,27 +48,29 @@ const ConferencePage: React.FC = () => {
                     </div>
                 ))}
             </div>
-            <CallControls 
-                status="connected"
-                onToggleAudio={toggleAudio}
-                onToggleVideo={toggleVideo}
-                onToggleScreenSharing={toggleScreenSharing}
-                onHangUp={leaveConference}
-                isAudioMuted={isAudioMuted}
-                isVideoEnabled={isVideoEnabled}
-                isScreenSharing={isScreenSharing}
-                // Dummy props to satisfy CallControls interface
-                myId=""
-                onlineUsers={[]}
-                incomingCall={null}
-                renegotiationRequired={false}
-                onCall={() => {}}
-                onAccept={() => {}}
-                onReject={() => {}}
-                onRenegotiate={() => {}}
-            />
+            {isBroadcaster && (
+                 <CallControls 
+                    status="connected"
+                    onToggleAudio={toggleAudio}
+                    onToggleVideo={toggleVideo}
+                    onToggleScreenSharing={toggleScreenSharing}
+                    onHangUp={stopBroadcast}
+                    isAudioMuted={isAudioMuted}
+                    isVideoEnabled={isVideoEnabled}
+                    isScreenSharing={isScreenSharing}
+                    // Dummy props to satisfy CallControls interface
+                    myId=""
+                    onlineUsers={[]}
+                    incomingCall={null}
+                    renegotiationRequired={false}
+                    onCall={() => {}}
+                    onAccept={() => {}}
+                    onReject={() => {}}
+                    onRenegotiate={() => {}}
+                />
+            )}
         </div>
     );
 };
 
-export default ConferencePage;
+export default BroadcastPage;

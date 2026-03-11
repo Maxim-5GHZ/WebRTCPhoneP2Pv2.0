@@ -21,6 +21,7 @@ import services.webrtc.UserRegistry;
 import services.webrtc.UserSession;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,8 @@ public class SocketHandler extends TextWebSocketHandler {
     private final Map<Long, WebSocketSession> sessions = new ConcurrentHashMap<>();
     private final Map<Long, Boolean> userInCallStatus = new ConcurrentHashMap<>();
     private final Map<Long, Long> userPeers = new ConcurrentHashMap<>(); // Карта для отслеживания пиров
+    private final Map<Long, String> userConnectionType = new ConcurrentHashMap<>();
+    private final Map<String, List<Long>> connectionTypeUsers = new ConcurrentHashMap<>();
     private final Object callLock = new Object();
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
@@ -58,6 +61,9 @@ public class SocketHandler extends TextWebSocketHandler {
                          UserRepository userRepository) {
         this.objectMapper = objectMapper;
         this.userRepository = userRepository;
+        connectionTypeUsers.put("CONFERENCE", new ArrayList<>());
+        connectionTypeUsers.put("P2P", new ArrayList<>());
+        connectionTypeUsers.put("BROADCAST", new ArrayList<>());
     }
 
     /**
@@ -109,6 +115,13 @@ public class SocketHandler extends TextWebSocketHandler {
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws IOException {
         Long userId = getUserId(session);
         if (userId != null) {
+            String connectionType = userConnectionType.get(userId);
+            if (connectionType != null) {
+                connectionTypeUsers.get(connectionType).remove(userId);
+                userConnectionType.remove(userId);
+                broadcastUserList(connectionType);
+            }
+
             synchronized (callLock) {
                 // Если пользователь был в звонке, уведомляем его собеседника
                 if (userPeers.containsKey(userId)) {
@@ -174,97 +187,148 @@ public class SocketHandler extends TextWebSocketHandler {
         if (fromUserId == null) return;
 
         JsonObject jsonMessage = gson.fromJson(message.getPayload(), JsonObject.class);
-        final UserSession user = registry.getBySession(session);
-        if (user != null) {
-            logger.debug("Incoming message from user '{}': {}", user.getName(), jsonMessage);
-        } else {
-            logger.debug("Incoming message from new user: {}", jsonMessage);
+        String type = jsonMessage.has("type") ? jsonMessage.get("type").getAsString() : jsonMessage.get("id").getAsString();
+
+        switch (type) {
+            case "select_connection_type":
+                handleSelectConnectionType(fromUserId, jsonMessage.get("connectionType").getAsString());
+                break;
+            case "join_room":
+                joinRoom(jsonMessage, session, fromUserId);
+                break;
+            case "start_broadcast":
+                startBroadcast(jsonMessage, session, fromUserId);
+                break;
+            case "offer":
+                sendToUser(jsonMessage, fromUserId);
+                break;
+            case "answer":
+                sendToUser(jsonMessage, fromUserId);
+                break;
+            case "candidate":
+                sendToUser(jsonMessage, fromUserId);
+                break;
+            case "leaveRoom":
+                leaveRoom(registry.getBySession(session));
+                break;
+            case "onIceCandidate":
+                JsonObject candidate = jsonMessage.get("candidate").getAsJsonObject();
+                UserSession user = registry.getBySession(session);
+                if (user != null) {
+                    IceCandidate cand = new IceCandidate(candidate.get("candidate").getAsString(),
+                            candidate.get("sdpMid").getAsString(), candidate.get("sdpMLineIndex").getAsInt());
+                    user.addCandidate(cand, jsonMessage.get("name").getAsString());
+                }
+                break;
+            case "call-user":
+                handleCallUser(session, fromUserId, getToUserId(jsonMessage.get("to")), objectMapper.readValue(message.getPayload(), HashMap.class), sessions.get(getToUserId(jsonMessage.get("to"))));
+                break;
+            case "make-answer":
+                handleMakeAnswer(fromUserId, getToUserId(jsonMessage.get("to")), objectMapper.readValue(message.getPayload(), HashMap.class), sessions.get(getToUserId(jsonMessage.get("to"))));
+                break;
+            case "ice-candidate":
+                handleIceCandidate(fromUserId, getToUserId(jsonMessage.get("to")), objectMapper.readValue(message.getPayload(), HashMap.class), sessions.get(getToUserId(jsonMessage.get("to"))));
+                break;
+            case "hang-up":
+                handleHangUp(fromUserId, getToUserId(jsonMessage.get("to")), sessions.get(getToUserId(jsonMessage.get("to"))));
+                break;
+            default:
+                logger.warn("Unknown message type: {}", type);
         }
+    }
 
+    private void sendToUser(JsonObject message, Long fromUserId) {
+        Long toUserId = getToUserId(message.get("to"));
+        if (toUserId == null) {
+            logger.warn("Recipient user ID ('to') is missing or invalid in payload: {}", message);
+            return;
+        }
+        WebSocketSession toSession = sessions.get(toUserId);
+        if (toSession != null && toSession.isOpen()) {
+            message.addProperty("from", fromUserId.toString());
+            sendMessage(toSession, message.toString());
+        }
+    }
+    
+        private void joinRoom(JsonObject params, WebSocketSession session, Long userId) throws IOException {
+        String roomName = params.get("roomId").getAsString();
+        Room room = roomManager.getRoom(roomName);
+        User user = userRepository.findById(userId).orElseThrow();
+        final UserSession userSession = room.join(user.getUsername(), session, "");
+        registry.register(userSession);
 
-        try {
-            Map<String, Object> payload = objectMapper.readValue(message.getPayload(), HashMap.class);
-            String type = (String) payload.get("type");
+        // Notify others in the room
+        for (UserSession otherUser : room.getParticipants()) {
+            if (!otherUser.getName().equals(userSession.getName())) {
+                sendMessage(otherUser.getSession(), Map.of("type", "user_joined", "userId", userSession.getName()));
+            }
+        }
+    }
 
-            if (type != null) {
-                Long toUserId = getToUserId(payload.get("to"));
+    private void startBroadcast(JsonObject params, WebSocketSession session, Long userId) throws IOException {
+        String roomName = params.get("roomId").getAsString();
+        Room room = roomManager.getRoom(roomName);
+        User user = userRepository.findById(userId).orElseThrow();
+        final UserSession userSession = room.join(user.getUsername(), session, "");
+        registry.register(userSession);
 
-                if (toUserId == null) {
-                    logger.warn("Recipient user ID ('to') is missing or invalid in payload: {}", payload);
-                    return; // Или отправить ошибку отправителю
-                }
-
-
-                WebSocketSession recipient = sessions.get(toUserId);
-                if (recipient == null || !recipient.isOpen()) {
-                    logger.warn("Recipient User ID {} not found or session is closed", toUserId);
-                    // Можно отправить сообщение об ошибке отправителю
-                    sendMessage(session, Map.of("type", "error", "message", "User " + toUserId + " is not online."));
-                    return;
-                }
-
-                switch (type) {
-                    case "call-user":
-                        handleCallUser(session, fromUserId, toUserId, payload, recipient);
-                        break;
-                    case "make-answer":
-                        handleMakeAnswer(fromUserId, toUserId, payload, recipient);
-                        break;
-                    case "ice-candidate":
-                        handleIceCandidate(fromUserId, toUserId, payload, recipient);
-                        break;
-                    case "hang-up":
-                        handleHangUp(fromUserId, toUserId, recipient);
-                        break;
-                    case "request-turn-renegotiation":
-                        sendMessage(recipient, Map.of("type", "request-turn-renegotiation", "from", fromUserId));
-                        break;
-                    default:
-                        logger.warn("Unknown message type: {}", type);
-                }
-            } else {
-                switch (jsonMessage.get("id").getAsString()) {
-                    case "joinRoom":
-                        joinRoom(jsonMessage, session);
-                        break;
-                    case "receiveVideoFrom":
-                        final String senderName = jsonMessage.get("sender").getAsString();
-                        final UserSession sender = registry.getBySession(session);
-                        final String sdpOffer = jsonMessage.get("sdpOffer").getAsString();
-                        if (sender != null) {
-                            user.receiveVideoFrom(sender, sdpOffer);
-                        }
-                        break;
-                    case "leaveRoom":
-                        leaveRoom(user);
-                        break;
-                    case "onIceCandidate":
-                        JsonObject candidate = jsonMessage.get("candidate").getAsJsonObject();
-
-                        if (user != null) {
-                            IceCandidate cand = new IceCandidate(candidate.get("candidate").getAsString(),
-                                    candidate.get("sdpMid").getAsString(), candidate.get("sdpMLineIndex").getAsInt());
-                            user.addCandidate(cand, jsonMessage.get("name").getAsString());
-                        }
-                        break;
-                    default:
-                        break;
+        // Notify all users in the BROADCAST group
+        List<Long> broadcastUsers = connectionTypeUsers.get("BROADCAST");
+        for (Long broadcastUserId : broadcastUsers) {
+            if (!broadcastUserId.equals(userId)) {
+                WebSocketSession broadcastUserSession = sessions.get(broadcastUserId);
+                if (broadcastUserSession != null && broadcastUserSession.isOpen()) {
+                    sendMessage(broadcastUserSession, Map.of("type", "start_broadcast", "userId", user.getUsername()));
                 }
             }
-        } catch (IOException e) {
-            logger.error("IO error handling message from user {}: {}", fromUserId, e.getMessage());
-        } catch (Exception e) {
-            logger.error("Unexpected error handling message from user {}: {}", fromUserId, e.getMessage(), e);
+        }
+    }
+
+    private void handleSelectConnectionType(Long userId, String connectionType) {
+        // Удаляем пользователя из предыдущей группы, если он там был
+        String oldConnectionType = userConnectionType.get(userId);
+        if (oldConnectionType != null) {
+            connectionTypeUsers.get(oldConnectionType).remove(userId);
+            broadcastUserList(oldConnectionType);
+        }
+
+        // Добавляем пользователя в новую группу
+        userConnectionType.put(userId, connectionType);
+        connectionTypeUsers.get(connectionType).add(userId);
+        broadcastUserList(connectionType);
+    }
+
+    private void broadcastUserList(String connectionType) {
+        List<Long> userIds = connectionTypeUsers.get(connectionType);
+        List<User> users = userRepository.findAllById(userIds);
+        List<Map<String, Object>> usersMap = users.stream()
+                .map(user -> {
+                    Map<String, Object> userMap = new HashMap<>();
+                    userMap.put("id", user.getId());
+                    userMap.put("username", user.getUsername());
+                    userMap.put("inCall", userInCallStatus.getOrDefault(user.getId(), false));
+                    return userMap;
+                })
+                .collect(Collectors.toList());
+
+        Map<String, Object> message = Map.of("type", "user_list", "connectionType", connectionType, "users", usersMap);
+
+        for (Long userId : userIds) {
+            WebSocketSession session = sessions.get(userId);
+            if (session != null && session.isOpen()) {
+                sendMessage(session, message);
+            }
         }
     }
 
     private void joinRoom(JsonObject params, WebSocketSession session) throws IOException {
         final String roomName = params.get("room").getAsString();
         final String name = params.get("name").getAsString();
+        final String sdpOffer = params.get("sdpOffer").getAsString();
         logger.info("PARTICIPANT {}: trying to join room {}", name, roomName);
 
         Room room = roomManager.getRoom(roomName);
-        final UserSession user = room.join(name, session);
+        final UserSession user = room.join(name, session, sdpOffer);
         registry.register(user);
     }
 

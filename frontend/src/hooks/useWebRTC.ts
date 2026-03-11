@@ -32,12 +32,10 @@ async function getIceServers(
   }
 }
 
-export function useWebRTC(
-  setOnlineUsers: React.Dispatch<React.SetStateAction<User[]>>,
-  token: string
-) {
+export function useWebRTC(token: string) {
   const { socket, sendSignal } = useSocket();
   const [myId, setMyId] = useState<string>("");
+  const [onlineUsers, setOnlineUsers] = useState<User[]>([]);
   const [status, setStatus] = useState<
     "idle" | "calling" | "ringing" | "connected"
   >("idle");
@@ -328,6 +326,7 @@ export function useWebRTC(
 
   return {
     myId,
+    onlineUsers,
     status,
     incomingCall,
     isAudioMuted,

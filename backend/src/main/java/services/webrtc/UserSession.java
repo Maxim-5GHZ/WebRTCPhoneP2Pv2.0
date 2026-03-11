@@ -215,6 +215,12 @@ public class UserSession implements Closeable {
         }
     }
 
+    public String start(String sdpOffer) {
+        final String sdpAnswer = this.outgoingMedia.processOffer(sdpOffer);
+        this.outgoingMedia.gatherCandidates();
+        return sdpAnswer;
+    }
+
 
     @Override
     public boolean equals(Object obj) {
